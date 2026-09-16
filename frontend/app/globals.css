@@ -4595,3 +4595,10 @@ select:focus-visible {
   line-height: 1.5;
   color: #6b7280;
 }
+
+/* 로그인하면 로고(홈) 클릭을 막는다. 다만 로고는 브랜드 표시라 흐려지거나 못 쓰는
+   것처럼 보이면 안 되므로 겉모습은 그대로 두고 커서만 기본으로 바꾼다. */
+.logo-group:disabled {
+  opacity: 1;
+  cursor: default;
+}

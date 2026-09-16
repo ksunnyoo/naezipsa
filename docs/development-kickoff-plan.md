@@ -1211,3 +1211,17 @@ PR #22와 #23이 모두 main에 들어간 뒤(`4b532c9`) 합쳐진 상태를 검
 파일: [backend/app/core/scoring.py](../backend/app/core/scoring.py), [insight/service.py](../backend/app/insight/service.py), [insight/router.py](../backend/app/insight/router.py), [backend/tests/test_scoring.py](../backend/tests/test_scoring.py).
 
 테스트: 백엔드 **367 passed**(신규 `test_scoring.py` 14개 포함). 프론트 125 passed, `eslint` 오류 0개, `next build` 성공.
+
+## 로그인하면 홈(로고) 버튼 비활성화 (2026-09-17)
+
+**사용자 결정:** 로그인 상태에서 홈 버튼은 의미가 없다.
+
+헤더 로고는 누르면 히어로(관심 매물 추가 안내)를 다시 여는 "홈으로" 버튼이었다. 그런데 히어로는 **매물을 처음 담게 하는 안내**라서, 이미 담고 로그인한 사용자에게는 돌아갈 이유가 없다. 로그인 사용자에게는 대시보드가 본 화면이다.
+
+**감추지 않고 클릭만 막았다.** 로고는 브랜드 표시라 사라지면 헤더가 허전해지고, 흐리게 처리하면 고장난 것처럼 보인다. 그래서 겉모습은 그대로 두고 `disabled`만 건다(`.logo-group:disabled`에서 `opacity: 1`, 커서는 기본).
+
+`aria-label`도 로그인 시 "홈으로" → **"내집사"** 로 바꾼다. 화면을 소리로 읽는 사용자에게 "홈으로"라고 알려주면서 눌리지 않으면 고장으로 들린다.
+
+파일: [frontend/components/Header.jsx](../frontend/components/Header.jsx), [globals.css](../frontend/app/globals.css), [frontend/tests/header-logo.test.jsx](../frontend/tests/header-logo.test.jsx).
+
+테스트 3개(로그인 전에는 눌러서 홈으로 갈 수 있음, 로그인하면 눌리지 않고 이름이 바뀜, 로고는 그대로 보임). 프론트 **128 passed**, `eslint` 오류 0개, `next build` 성공.
