@@ -32,14 +32,21 @@ import {
   revokeGroupShareLinks,
   getSharedGroup,
   getInspection,
+  getInspections,
   saveInspection,
+  updateGroupScoring,
 } from "@/lib/api";
 import {
   toCreateItemPayload,
   toDetailsPayload,
   fromBackendItem,
 } from "@/lib/dashboardItems";
-import { fromInspectionRecord, toInspectionPayload } from "@/lib/checklist";
+import {
+  computeOverallScore,
+  fromInspectionRecord,
+  toInspectionPayload,
+  weightsForContext,
+} from "@/lib/checklist";
 
 // 새 그룹 기본 이름: "새 그룹", 이미 있으면 "새 그룹 2", "새 그룹 3" ...
 // 이름을 먼저 묻지 않고 만든 뒤 그룹 메뉴에서 바로 고친다.
@@ -196,6 +203,22 @@ export default function NaejipsaApp() {
           setDashboardRevealed(true);
           setHeroCleared(true);
         }
+        // 카드에 점수를 띄우려면 목록 단계에서 모든 후보의 체크리스트가 필요하다.
+        // 후보마다 한 번씩 부르면 느려서 한 번에 받아온다. 실패하면 목록은 그대로
+        // 보여주고 점수만 안 보인다(작성·저장은 그대로 된다).
+        getInspections()
+          .then((inspections) => {
+            if (cancelled || currentUserIdRef.current !== user.id) return;
+            setItemChecklists(
+              Object.fromEntries(
+                inspections.items.map((record) => [
+                  `srv-${record.property_id}`,
+                  fromInspectionRecord(record),
+                ]),
+              ),
+            );
+          })
+          .catch(() => {});
       })
       .catch(() => {
         if (cancelled) return;
@@ -262,11 +285,22 @@ export default function NaejipsaApp() {
   // 그룹을 보고 있으면 그 그룹에 든 후보만 보여준다(순서는 전체 후보에서 정한 순서).
   // 후보 자체는 dashboardItems에 그대로 있다.
   const shownGroup = activeGroup && activeGroup.userId === user?.id ? activeGroup : null;
-  const visibleItems = shownGroup
+  const scopedItems = shownGroup
     ? dashboardItems.filter(
         (it) => it.backendId != null && shownGroup.itemIds.includes(it.backendId),
       )
     : dashboardItems;
+  // 카드에 띄울 임장 점수. 지금 보고 있는 화면 기준으로 가중치를 고른다 - 그룹을
+  // 보고 있으면 그 그룹 기준, 전체 후보 화면이면 프로필 기본(전세/매매)이다.
+  // 같은 후보라도 그룹을 옮기면 점수가 달라 보이지만, 한 그룹 안에서는 모두 같은
+  // 자로 재기 때문에 그 안의 비교는 언제나 공정하다(2026-09-16 결정).
+  const scoringWeights = weightsForContext(shownGroup, profile?.service_purposes);
+  const visibleItems = scopedItems.map((item) => {
+    const saved = itemChecklists[checklistKey(item)];
+    const score = saved ? computeOverallScore(saved.values, scoringWeights)?.score : null;
+    // 체크리스트를 쓰지 않은 후보는 점수가 없다(카드에 뱃지도 안 붙는다).
+    return score == null ? item : { ...item, score };
+  });
   // 그룹 만들기·기존 그룹에 추가의 "선택"은 카드 체크 상태를 그대로 쓴다(서버에 저장된 후보만).
   const selectedBackendIds = visibleItems
     .filter((it) => it.checked && it.backendId != null)
@@ -331,14 +365,25 @@ export default function NaejipsaApp() {
   }, [groupBarOpen]);
 
   function showGroup(group) {
-    setActiveGroup({ id: group.id, name: group.name, itemIds: group.item_ids, userId: user.id });
+    setActiveGroup({
+      id: group.id, name: group.name, itemIds: group.item_ids, userId: user.id,
+      // 이 그룹의 점수 기준. null이면 프로필 기본(전세/매매)으로 점수를 낸다.
+      scoring_weights: group.scoring_weights ?? null,
+    });
   }
 
   // 서버가 돌려준 그룹 상세로 GroupBar 목록과 보고 있는 그룹을 함께 갱신한다.
   function applyGroup(group) {
     setGroups((gs) => gs.map((g) => (g.id === group.id ? group : g)));
     setActiveGroup((current) =>
-      current?.id === group.id ? { ...current, name: group.name, itemIds: group.item_ids } : current,
+      current?.id === group.id
+        ? {
+            ...current,
+            name: group.name,
+            itemIds: group.item_ids,
+            scoring_weights: group.scoring_weights ?? null,
+          }
+        : current,
     );
   }
 
@@ -404,6 +449,20 @@ export default function NaejipsaApp() {
   async function handleRenameGroup(groupId, name) {
     try {
       applyGroup(await renameGroup(groupId, name));
+      return true;
+    } catch (err) {
+      toast.show(err.message);
+      return false;
+    }
+  }
+
+  // 그룹의 점수 기준(카테고리 가중치) 저장. weights가 null이면 그룹 기준을 지워
+  // 프로필 기본(전세/매매)으로 되돌린다. 저장하면 그 그룹을 보고 있는 동안 카드
+  // 점수가 바로 새 기준으로 다시 계산된다.
+  async function handleUpdateScoring(groupId, weights) {
+    try {
+      applyGroup(await updateGroupScoring(groupId, weights));
+      toast.show(weights ? "점수 기준을 저장했어요" : "점수 기준을 기본값으로 되돌렸어요");
       return true;
     } catch (err) {
       toast.show(err.message);
@@ -889,6 +948,9 @@ export default function NaejipsaApp() {
             onRename: handleRenameGroup,
             onDelete: handleDeleteGroup,
             onStopShare: handleStopGroupShare,
+            onUpdateScoring: handleUpdateScoring,
+            // 그룹이 점수 기준을 정하지 않았을 때 편집 시작값으로 쓸 프로필 기본.
+            servicePurposes: profile?.service_purposes,
           }}
           onShare={handleShare}
         />

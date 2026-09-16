@@ -5,9 +5,12 @@ import { describe, expect, it } from "vitest";
 import {
   CATEGORY_WEIGHTS,
   EMPTY_CHECKLIST,
+  WEIGHT_CATEGORIES,
   computeOverallScore,
+  editableWeights,
   fromInspectionRecord,
   toInspectionPayload,
+  weightsForContext,
   weightsForPurposes,
 } from "@/lib/checklist";
 
@@ -127,5 +130,41 @@ describe("저장 형태 변환", () => {
 
   it("기록이 없으면 null이다(빈 체크리스트로 시작한다는 뜻)", () => {
     expect(fromInspectionRecord(null)).toBeNull();
+  });
+});
+
+describe("어느 가중치로 점수를 낼지 (그룹 > 프로필)", () => {
+  const CUSTOM = {
+    transport_group: 50, education_life_group: 10, complex_group: 10,
+    interior_condition_group: 20, facility_group: 10,
+  };
+
+  it("그룹에 정해둔 가중치가 프로필 기본보다 먼저다", () => {
+    expect(weightsForContext({ scoring_weights: CUSTOM }, ["jeonse"])).toBe(CUSTOM);
+  });
+
+  it("그룹을 안 보거나 그룹이 가중치를 안 정했으면 프로필 기본을 쓴다", () => {
+    expect(weightsForContext(null, ["jeonse"])).toBe(CATEGORY_WEIGHTS.jeonse);
+    expect(weightsForContext({ scoring_weights: null }, ["buy"])).toBe(CATEGORY_WEIGHTS.buy);
+  });
+
+  it("카테고리가 빠진 값은 믿지 않고 프로필 기본으로 돌아간다", () => {
+    expect(weightsForContext({ scoring_weights: { transport_group: 30 } }, ["buy"]))
+      .toBe(CATEGORY_WEIGHTS.buy);
+  });
+
+  it("편집 시작값은 항상 정수다 - 서버가 0~100 정수만 받는다", () => {
+    // 전세·매매를 둘 다 고르면 기본값이 두 벌의 중간이라 소수가 나올 수 있다.
+    const middle = editableWeights(null, ["jeonse", "buy"]);
+    for (const { key } of WEIGHT_CATEGORIES) {
+      expect(Number.isInteger(middle[key])).toBe(true);
+    }
+    expect(editableWeights({ scoring_weights: CUSTOM }, [])).toEqual(CUSTOM);
+  });
+
+  it("편집 화면의 카테고리는 체크리스트 묶음 5개와 같다", () => {
+    expect(new Set(WEIGHT_CATEGORIES.map((c) => c.key)))
+      .toEqual(new Set(Object.keys(CATEGORY_WEIGHTS.buy)));
+    expect(WEIGHT_CATEGORIES.every((c) => c.label)).toBe(true);
   });
 });

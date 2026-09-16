@@ -50,6 +50,19 @@ class InspectionRecord(InspectionCreate):
     updated_at: datetime
 
 
+class InspectionListResponse(BaseModel):
+    """내 후보의 임장 기록 전체. 후보 카드에 점수를 띄우려면 목록 단계에서
+    모든 후보의 항목 점수가 필요해서 한 번에 준다(후보마다 한 번씩 부르면 느리다).
+
+    후보 목록 응답(DashboardItemWithMetrics)에 섞지 않는 이유: 그 모양은 그룹
+    상세와 공유 링크 응답에도 함께 쓰여서, 거기에 임장 값을 넣으면 로그인 없이
+    보는 공유 링크로 임장 기록이 새어 나간다.
+    """
+
+    items: list[InspectionRecord]
+    count: int
+
+
 class InspectionProperty(BaseModel):
     id: int
     size_id: int

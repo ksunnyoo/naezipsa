@@ -26,7 +26,8 @@ groups.owner_user_id -> profiles.id 외래키는 dashboard_items.user_id와 같�
   - 링크를 열어도 후보를 복사하거나 그룹에 참여시키지 않는다. 공동 참여는 보류다.
 """
 from sqlalchemy import (
-    BigInteger, Column, DateTime, ForeignKey, Index, Integer, String, UniqueConstraint, Uuid, func,
+    JSON, BigInteger, Column, DateTime, ForeignKey, Index, Integer, String, UniqueConstraint,
+    Uuid, func,
 )
 
 from app.core.database import Base
@@ -48,6 +49,10 @@ class Group(Base):
     id = Column(BigInteger().with_variant(Integer, "sqlite"), primary_key=True, autoincrement=True)
     owner_user_id = Column(Uuid(as_uuid=True), nullable=False)
     name = Column(String(MAX_GROUP_NAME_LENGTH), nullable=False)
+    # 임장 점수 가중치(카테고리 5개 비중). NULL이면 이 그룹은 따로 정하지 않은 것이고,
+    # 화면이 프로필 이용 목적(전세/매매)의 기본 가중치를 쓴다. 체크 항목 18개는
+    # 모든 그룹이 공통이고 가중치만 그룹마다 다르다(2026-09-16 결정).
+    scoring_weights = Column(JSON, nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at = Column(
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()

@@ -11,6 +11,8 @@ Phase 5 착수(2026-09-16, 사용자 지시): 그룹 공유 링크(읽기 전용
 
 임장 체크리스트 저장 연결(2026-09-16, 사용자 결정·구현): 담당자에게 넘겼던 결정 5가지를 사용자가 직접 정하고 구현했다. 웹 체크리스트가 서버에 저장·복원되며, 종합 평점은 체크한 항목으로 자동 계산한다. 아래 "임장 체크리스트 저장 연결" 참고. 새 migration `a4f2c8e91b07`는 **공용 DB에 적용 완료**(2026-09-16, 사용자 승인). 수동 확인 대기.
 
+그룹별 점수 기준과 카드 점수(2026-09-16, 사용자 결정·구현): 점수 산출 규칙을 그룹 단위로만 다르게 두고, 사용자가 카테고리 5개 비중을 직접 고칠 수 있게 했다. 계산된 점수는 후보 카드에 뱃지로 보인다. 아래 "그룹별 점수 기준과 후보 카드 점수" 참고. 새 migration `b7d3e5a19c42`는 **공용 DB에 적용 완료**(2026-09-16, 사용자 승인). 수동 확인 대기.
+
 설계 준비(2026-09-15): 사용자 요청으로 [정렬 순서 저장·공유/공동참여 설계](ordering-and-sharing-design.md)를 추가했다. 현재 `7ed9923` 구현을 기준으로 정렬 API·migration 순서, 그룹/기존 스냅샷 공유 구분, membership·원본 소유권, 완료 기준을 정리한 **구현 전 제안**이다. 정렬 보완과 Phase 5 구현은 착수하지 않았다.
 
 정렬 보완 착수(2026-09-15): 사용자 지시로 위 설계 3장(정렬 순서 저장)만 구현했다. 아래 "Phase 3 보완 변경 요약" 참고. 설계 4장(공유/공동참여)은 확정 요구가 아닌 제안으로 두고 착수하지 않았다.
@@ -943,3 +945,90 @@ PostgreSQL은 일반 ALTER로 처리하고, SQLite(테스트)만 제약을 ALTER
 - [ ] 모바일 임장 페이지 담당자에게 API 계약 변경 3가지 전달(위 "API 계약 변경").
 - [ ] 종합 평점 자동 계산이 체감과 맞는지 보고 가중치 숫자 조정. 숫자는 `frontend/lib/checklist.js`의 `CATEGORY_WEIGHTS` 한 곳에 모여 있다.
 - [ ] 교육·생활 묶음에 학군·학원(지금 타깃엔 덜 중요)과 편의시설·소음·유해시설(지금 중요)이 섞여 있다. 카테고리 단위 가중치로는 둘을 따로 못 움직인다 — 사용자가 평점을 자주 고치면 항목 단위 가중치를 검토한다.
+
+## 그룹별 점수 기준과 후보 카드 점수 (2026-09-16)
+
+"자동 계산 점수는 왜 있는가"라는 사용자 질문에서 시작했다. 확인해 보니 그 점수는 **팝업 안에서만 보이고 아무 데도 쓰이지 않았다** — 카드에도, 비교에도, AI 분석에도(임장 기록을 아예 읽지 않는다). 그래서 점수를 카드에 띄우기로 하고, 점수가 비교에 쓰이려면 같은 자로 재야 한다는 요구에서 "그룹별 기준"이 나왔다.
+
+**사용자 결정**
+
+| 항목 | 결정 |
+|---|---|
+| 그룹마다 다른 것 | **가중치만.** 체크 항목 18개는 모든 그룹 공통 |
+| 고칠 수 있는 범위 | 카테고리 5개 비중을 숫자로 직접 조정(전세·매매 프리셋이 시작값) |
+| 카드에 띄울 점수 | **지금 보는 화면 기준.** 그룹을 보면 그 그룹 기준, 전체 후보면 프로필 기본 |
+
+**왜 그룹 단위인가:** 같은 후보가 여러 그룹에 들어갈 수 있고 그룹에 아예 없을 수도 있다(group_items 복합 PK). 후보마다 기준이 다르면 비교가 무의미해지므로, 한 그룹 안의 후보는 모두 같은 자로 잰다. 대신 같은 후보를 다른 그룹에서 보면 점수가 달라 보이는데, 그건 의도한 동작이다.
+
+**항목 구성이 아니라 가중치만 그룹별인 이유:** 그룹마다 보는 항목이 다르면, 한 그룹에서 채우지 않은 항목이 다른 그룹에서는 빈칸이 되어 점수가 뚝 떨어진다. 항목이 공통이면 기록 하나를 모든 그룹이 그대로 쓴다.
+
+### 구현
+
+- **백엔드**
+  - `groups.scoring_weights` JSON(nullable). null이면 "이 그룹은 따로 정하지 않음"이고 화면이 프로필 기본을 쓴다. 기존 그룹은 전부 null이라 지금까지 보이던 점수가 달라지지 않는다.
+  - `PATCH /api/v1/groups/{id}`가 **보낸 필드만** 바꾼다(`name`만, `scoring_weights`만, 둘 다). `scoring_weights`에 null을 보내면 그룹 기준을 지운다. 아무것도 안 보내면 422.
+  - 가중치 검증: 카테고리 5개 정확히, 각 0~100, 전부 0이면 거부(점수를 낼 수 없다). 합이 100일 필요는 없다 — 계산할 때 가중치 합으로 정규화하므로 비율만 의미가 있다.
+  - 그룹 목록·상세 응답에 `scoring_weights`를 실어, 카드 점수를 낼 때 그룹마다 다시 부르지 않는다.
+  - **`GET /api/v1/properties/inspections` 신설** — 내 후보의 임장 기록을 한 번에 준다. 카드에 점수를 띄우려면 목록 단계에서 모든 후보의 항목 점수가 필요한데, 후보마다 부르면 느리다.
+    후보 목록 응답(`DashboardItemWithMetrics`)에 섞지 않은 이유: 그 모양은 **그룹 상세와 공유 링크 응답에도 함께 쓰여서**, 거기에 임장 값을 넣으면 로그인 없이 보는 공유 링크로 임장 기록이 새어 나간다.
+- **프론트**
+  - 그룹 메뉴(GroupBar)의 각 그룹 줄에 "점수" 버튼. 누르면 그 자리에서 카테고리 5개 숫자를 고치고 저장하거나 "기본값으로" 되돌린다. 목록 위에 버튼 줄이나 별도 설정 화면을 새로 만들지 않았다.
+  - 후보 카드에 점수 뱃지. 체크리스트를 쓰지 않은 후보에는 붙지 않는다.
+  - 로그인하면 임장 기록을 한 번에 받아 후보마다 점수를 계산한다. 불러오기에 실패하면 목록은 그대로 보여주고 점수만 안 보인다.
+
+### 수정 파일
+
+| 파일 | 변경 내용 |
+|---|---|
+| [backend/alembic/versions/20260916_1720_b7d3e5a19c42_add_groups_scoring_weights.py](../backend/alembic/versions/20260916_1720_b7d3e5a19c42_add_groups_scoring_weights.py) | 신규 마이그레이션(부모 `a4f2c8e91b07`) |
+| [backend/app/group/model.py](../backend/app/group/model.py), [schema.py](../backend/app/group/schema.py), [service.py](../backend/app/group/service.py), [router.py](../backend/app/group/router.py) | 가중치 컬럼·검증, PATCH를 "보낸 필드만 수정"으로, 응답에 가중치 |
+| [backend/app/inspection/schema.py](../backend/app/inspection/schema.py), [service.py](../backend/app/inspection/service.py), [router.py](../backend/app/inspection/router.py) | 임장 기록 일괄 조회 |
+| [frontend/lib/checklist.js](../frontend/lib/checklist.js) | 어느 가중치로 계산할지 고르는 규칙, 편집 시작값 |
+| [frontend/lib/api.js](../frontend/lib/api.js) | `getInspections`, `updateGroupScoring` |
+| [frontend/components/Dashboard/GroupBar.jsx](../frontend/components/Dashboard/GroupBar.jsx) | 점수 기준 편집 |
+| [frontend/components/Dashboard/InterestCard.jsx](../frontend/components/Dashboard/InterestCard.jsx) | 점수 뱃지 |
+| [frontend/components/NaejipsaApp.jsx](../frontend/components/NaejipsaApp.jsx) | 일괄 로딩, 화면 기준 점수 계산, 그룹 가중치 저장 |
+| [frontend/app/globals.css](../frontend/app/globals.css) | 뱃지·편집 영역 스타일 |
+| [backend/tests/test_groups.py](../backend/tests/test_groups.py), [test_inspection.py](../backend/tests/test_inspection.py), [frontend/tests/inspection-checklist.test.js](../frontend/tests/inspection-checklist.test.js), [group-scoring.test.jsx](../frontend/tests/group-scoring.test.jsx) | 테스트 |
+
+### DB migration
+
+새 리비전 `b7d3e5a19c42`(부모 `a4f2c8e91b07`, head 1개). **2026-09-16 사용자 승인 후 공용 DB에 적용했다.**
+
+offline `--sql`에서 실행되는 문장은 컬럼 추가 하나뿐이다.
+
+```sql
+ALTER TABLE groups ADD COLUMN scoring_weights JSON;
+```
+
+기존 테이블·행은 그대로이고 값은 전부 NULL로 시작한다. downgrade는 컬럼만 지운다(정해둔 그룹 기준은 사라진다).
+
+- **적용 결과(읽기 전용 확인):** 위치 `a4f2c8e91b07` → `b7d3e5a19c42`(head). 그룹 7개 그대로이고 `scoring_weights`는 전부 NULL이라, 적용만으로 지금까지 보이던 점수가 달라지지 않는다. 컬럼 타입은 `json`이다.
+- **팀원 주의:** 이 코드는 그룹 목록·상세에서 `scoring_weights`를 읽는다. main을 받기 전 옛 코드 서버는 그대로 동작하지만, 이 코드를 받은 뒤에는 **서버를 재시작해야** 한다.
+
+### 테스트
+
+- **백엔드**: 새 그룹은 기준 없음, 저장·지우기, **이름만 바꿔도 가중치가 유지됨**(보낸 필드만 수정), 잘못된 값 거부(카테고리 누락·정의되지 않은 키·범위 밖·전부 0), 빈 PATCH 422, 남의 그룹 404. 일괄 조회는 내 기록만 나오고 남의 후보 기록은 빠지며, `/{property_id}`보다 먼저 선언됐는지까지 확인한다.
+- **백엔드 전체: 331 passed**(실DB 픽스처를 쓰는 `test_insight.py`·`test_user_api.py` 제외).
+- **프론트 신규 12개**: 가중치 선택 규칙(그룹 > 프로필, 카테고리가 빠진 값은 불신), 편집 시작값이 정수, 로그인 시 일괄 조회 1회로 후보마다 점수 계산, 체크리스트 없는 후보는 점수 없음, 불러오기 실패해도 목록 유지, 뱃지 표시·미표시, 편집 저장이 5개를 모두 담아 보냄, 전부 0이면 저장 불가, 기본값으로는 null 전송.
+- **프론트 전체: 117 passed**, `eslint` 오류 0개(기존 `<img>` 경고 16개), `next build` 성공.
+- **확인 중 관찰:** `profile-onboarding.test.jsx`의 배경 스크롤 검사가 한 번 실패했다가 재실행·단독 실행에서 모두 통과했다. 이번 변경과 무관한 기존 간헐적 실패로 보고 손대지 않았다.
+- **격리 테스트로 확인하지 못한 것:** 실제 PostgreSQL에서 JSON 컬럼 읽기·쓰기. 마이그레이션의 PostgreSQL 경로는 공용 DB 적용 때 처음 실행된다.
+
+### 수동 확인 필요
+
+`b7d3e5a19c42`를 적용하고 서버를 재시작한 뒤에 확인한다.
+
+1. 체크리스트를 쓴 후보의 카드에 점수 뱃지가 보이는지, 안 쓴 후보에는 안 보이는지 확인한다.
+2. 그룹 메뉴 → "점수" → 교통 비중을 크게 올리고 저장 → 그 그룹을 보는 동안 카드 점수가 바뀌는지 확인한다.
+3. 전체 후보 화면으로 돌아오면 점수가 프로필 기본(전세/매매) 기준으로 돌아오는지 확인한다.
+4. 같은 후보를 두 그룹에 넣고 기준을 다르게 준 뒤, 그룹을 옮겨 보면 점수가 다르게 보이는지 확인한다.
+5. "기본값으로"를 누르면 그룹 기준이 사라지고 프로필 기본으로 돌아오는지 확인한다.
+6. 그룹 이름만 바꿔도 점수 기준이 그대로인지 확인한다.
+
+### 다음 단계 전에 확인할 것
+
+- [x] `b7d3e5a19c42` 공용 DB 적용(2026-09-16, 사용자 승인).
+- [ ] 위 수동 확인.
+- [ ] 점수를 비교 영역·정렬에도 쓸지. 지금은 카드 뱃지에만 쓴다.
+- [ ] AI 분석에 임장 점수를 넘길지. 지금 `insight`는 임장 기록을 읽지 않는다.

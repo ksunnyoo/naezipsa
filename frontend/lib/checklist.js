@@ -163,6 +163,36 @@ export function weightsForPurposes(servicePurposes) {
   );
 }
 
+// 가중치를 고칠 때 화면에 보여줄 순서와 이름. 체크리스트 묶음과 키가 같다.
+export const WEIGHT_CATEGORIES = CHECKLIST_GROUPS.map((group) => ({
+  key: group.key,
+  label: group.label,
+}));
+
+// 지금 어떤 가중치로 점수를 낼지 고른다(2026-09-16 결정).
+//
+// 그룹을 보고 있으면 그 그룹에 정해둔 가중치를, 없으면(또는 전체 후보 화면이면)
+// 프로필 이용 목적에서 고른 기본 가중치를 쓴다. 그래서 같은 후보라도 어느 그룹에서
+// 보느냐에 따라 점수가 달라지는데, 그게 의도다 - 한 그룹 안에서는 모두 같은 자로
+// 재니까 그 안의 비교는 언제나 공정하다.
+export function weightsForContext(group, servicePurposes) {
+  const custom = group?.scoring_weights;
+  if (custom && WEIGHT_CATEGORIES.every(({ key }) => typeof custom[key] === "number")) {
+    return custom;
+  }
+  return weightsForPurposes(servicePurposes);
+}
+
+// 가중치 편집을 시작할 때 쓸 값. 그룹에 정해둔 게 있으면 그것, 없으면 프로필
+// 기본을 시작점으로 준다. 서버가 0~100 정수만 받으므로 반올림해서 넘긴다
+// (목적을 둘 다 고른 경우의 기본값은 두 벌의 중간이라 소수가 될 수 있다).
+export function editableWeights(group, servicePurposes) {
+  const base = weightsForContext(group, servicePurposes);
+  return Object.fromEntries(
+    WEIGHT_CATEGORIES.map(({ key }) => [key, Math.round(base[key] ?? 0)]),
+  );
+}
+
 // 유해시설만 0=없음(좋음)/1=있음(나쁨)이라 다른 17개와 자가 반대다. 그대로
 // 평균에 넣으면 값이 망가지므로 1~3 자로 옮긴다(없음=3, 있음=1).
 function itemScore(key, value) {

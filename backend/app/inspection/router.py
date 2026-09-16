@@ -7,11 +7,30 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.deps import get_current_profile
 from app.inspection import service
-from app.inspection.schema import InspectionCreate, InspectionProperty, InspectionRecord
+from app.inspection.schema import (
+    InspectionCreate,
+    InspectionListResponse,
+    InspectionProperty,
+    InspectionRecord,
+)
 from app.user.model import Profile
 
 router = APIRouter(prefix="/properties", tags=["inspection"])
 PropertyId = Annotated[int, Path(gt=0, le=9223372036854775807)]
+
+
+@router.get("/inspections", response_model=InspectionListResponse)
+def list_inspections(
+    profile: Profile = Depends(get_current_profile),
+    db: Session = Depends(get_db),
+):
+    """내 후보의 임장 기록을 한 번에 불러온다(후보 카드 점수용).
+
+    아래 `/{property_id}`보다 **먼저** 선언해야 한다. FastAPI는 선언한 순서대로
+    경로를 맞춰보므로, 뒤에 두면 "inspections"가 {property_id}(정수)에 먼저 걸려
+    422가 나고 이 함수까지 오지 않는다.
+    """
+    return service.list_inspections(db, profile.id)
 
 
 @router.get("/{property_id}", response_model=InspectionProperty)

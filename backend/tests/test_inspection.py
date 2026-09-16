@@ -154,7 +154,31 @@ def test_login_required(inspection_env):
     del app.dependency_overrides[get_current_profile]
     assert client.get(f'{URL}/1').status_code == 401
     assert client.get(f'{URL}/1/inspection').status_code == 401
+    assert client.get(f'{URL}/inspections').status_code == 401
     assert client.post(f'{URL}/1/inspection', json={'overall_rating': 3}).status_code == 401
+
+
+def test_list_my_inspections(inspection_env):
+    """후보 카드 점수용 일괄 조회. 내 후보 기록만 나온다.
+
+    경로가 `/{property_id}`보다 먼저 선언되지 않으면 "inspections"가 정수 id로
+    해석돼 422가 난다. 200과 목록 모양으로 그 선언 순서까지 함께 확인한다.
+    """
+    client, engine = inspection_env
+    assert client.get(f'{URL}/inspections').json() == {'items': [], 'count': 0}
+
+    client.post(f'{URL}/1/inspection', json={'overall_rating': 5, 'transport': 3})
+    client.post(f'{URL}/2/inspection', json={'overall_rating': 2})
+    # 남의 후보(3번)에도 기록을 직접 넣어 둔다 - 목록에 섞이면 안 된다.
+    with Session(engine) as db:
+        db.execute(insert(PropertyInspection).values(property_id=3, overall_rating=4))
+        db.commit()
+
+    body = client.get(f'{URL}/inspections').json()
+    assert body['count'] == 2
+    assert [row['property_id'] for row in body['items']] == [1, 2]
+    assert body['items'][0]['transport'] == 3
+    assert body['items'][1]['transport'] is None  # 고르지 않은 항목은 미확인 그대로
 
 
 def test_get_saved_inspection(inspection_env):

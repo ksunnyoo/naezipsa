@@ -70,7 +70,19 @@ export default function InterestCard({ item, onToggle, onEdit, onRemove, onDragH
             </button>
           </div>
         </div>
-        <div className="interest-card-name">{item.name}</div>
+        <div className="interest-card-name">
+          {item.name}
+          {/* 임장 체크리스트 점수. 체크리스트를 쓰지 않은 후보는 점수가 없어 뱃지도 없다.
+              지금 보고 있는 화면 기준(그룹이면 그 그룹 가중치)으로 계산된 값이다. */}
+          {item.score != null && (
+            <span
+              className="interest-card-score"
+              title="임장 체크리스트 점수 (5점 만점)"
+            >
+              {item.score}
+            </span>
+          )}
+        </div>
         <div className="interest-card-size">
           {item.sizeLabel} · <span className="interest-card-dongho">{dongHoText(item)}</span>
         </div>

@@ -5,7 +5,12 @@ from sqlalchemy.orm import Session
 
 from app.dashboard.model import DashboardItem
 from app.inspection.model import PropertyInspection
-from app.inspection.schema import InspectionCreate, InspectionProperty, InspectionRecord
+from app.inspection.schema import (
+    InspectionCreate,
+    InspectionListResponse,
+    InspectionProperty,
+    InspectionRecord,
+)
 from app.property.model import ComplexMaster, SizeMaster
 
 
@@ -25,6 +30,24 @@ def get_property(db: Session, user_id, property_id: int) -> InspectionProperty:
         dong=item.dong, ho=item.ho, floor=item.floor, list_price=item.list_price,
         representative_area=size.representative_area if size else None,
         pyeong=size.pyeong if size else None,
+    )
+
+
+def list_inspections(db: Session, user_id) -> InspectionListResponse:
+    """내 후보의 임장 기록을 한 번에 돌려준다(후보 카드에 점수를 띄우기 위함).
+
+    남의 후보 기록은 조인 조건에서 걸러진다. 아직 체크리스트를 쓰지 않은 후보는
+    기록 자체가 없어 목록에서 빠진다(빈 껍데기를 만들어 보내지 않는다).
+    """
+    rows = db.scalars(
+        select(PropertyInspection)
+        .join(DashboardItem, DashboardItem.id == PropertyInspection.property_id)
+        .where(DashboardItem.user_id == user_id)
+        .order_by(PropertyInspection.property_id)
+    ).all()
+    return InspectionListResponse(
+        items=[InspectionRecord.model_validate(row) for row in rows],
+        count=len(rows),
     )
 
 
