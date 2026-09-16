@@ -14,9 +14,10 @@ import {
   weightsForContext,
 } from "@/lib/checklist";
 
-// 종합 평점 선택지(1~5). ChipGroup은 같은 값을 다시 누르면 null을 주는데,
-// 여기선 그게 "직접 고른 값을 지우고 자동 계산으로 되돌린다"는 뜻이 된다.
-const RATING_OPTIONS = [1, 2, 3, 4, 5].map((value) => ({ value, label: String(value) }));
+// 종합 평점은 사용자가 고르지 않는다(2026-09-16 결정). 체크한 항목으로 계산한
+// 100점 만점 점수를 그대로 보여주고, 기준이 마음에 들지 않으면 "?"에서 비중을
+// 고친다 - 점수를 직접 누르는 것보다 "무엇을 중요하게 보는지"를 고치는 쪽이
+// 다음 후보에도 그대로 적용되기 때문이다.
 
 // 가중치 합. 전부 0이면 점수를 낼 수 없어 저장을 막는다(서버도 422로 거절한다).
 function weightsTotal(weights) {
@@ -52,7 +53,6 @@ export default function EditListingDialog({
   open,
   item,
   initialChecklist,
-  initialRating,
   group,
   profile,
   onSave,
@@ -67,8 +67,6 @@ export default function EditListingDialog({
   const [interior, setInterior] = useState(null);
   const [showChecklist, setShowChecklist] = useState(false);
   const [checklist, setChecklist] = useState(EMPTY_CHECKLIST);
-  // null이면 "자동 계산을 쓴다", 숫자면 "사용자가 직접 고른 값".
-  const [ratingOverride, setRatingOverride] = useState(null);
   const [saving, setSaving] = useState(false);
   // "?" 로 펼치는 점수 기준 설명·수정. draftWeights는 펼칠 때의 현재 기준으로 채운다.
   const [helpOpen, setHelpOpen] = useState(false);
@@ -113,16 +111,7 @@ export default function EditListingDialog({
       // 저장해둔 값이 있으면 그걸로, 없으면 빈 체크리스트로.
       setShowChecklist(false);
       setHelpOpen(false);
-      const loaded = initialChecklist || EMPTY_CHECKLIST;
-      setChecklist(loaded);
-      // 저장된 평점이 자동 계산값과 같으면 "자동"으로 두어 항목을 고칠 때마다
-      // 따라 움직이게 하고, 다르면 사용자가 직접 고른 값으로 보고 지킨다.
-      const autoOnLoad = computeOverallScore(loaded, weights);
-      setRatingOverride(
-        initialRating != null && initialRating !== autoOnLoad?.rating
-          ? initialRating
-          : null,
-      );
+      setChecklist(initialChecklist || EMPTY_CHECKLIST);
     }
   }
 
@@ -153,9 +142,9 @@ export default function EditListingDialog({
     setChecklist((prev) => ({ ...prev, [key]: value }));
   }
 
-  // 체크한 항목으로 계산한 점수(없으면 null)와, 실제로 저장할 평점.
+  // 체크한 항목으로 계산한 100점 만점 점수(없으면 null)와, 저장할 1~5 평점.
   const auto = computeOverallScore(checklist, weights);
-  const rating = ratingOverride ?? auto?.rating ?? null;
+  const rating = auto?.rating ?? null;
 
   return (
     <div className={"edit-overlay" + (open ? " is-open" : "")} inert={!open} onClick={(e) => {
@@ -258,10 +247,7 @@ export default function EditListingDialog({
               <InspectionChecklist values={checklist} onChange={updateChecklistField} />
               <div className="field-block checklist-rating">
                 <div className="field-block-label">
-                  종합 평점
-                  {auto && (
-                    <span className="checklist-rating-auto">자동 계산 {auto.score}점</span>
-                  )}
+                  {auto ? `종합 평점 : ${auto.score}점` : "종합 평점"}
                   <button
                     type="button"
                     className="checklist-rating-help-btn"
@@ -273,16 +259,10 @@ export default function EditListingDialog({
                     ?
                   </button>
                 </div>
-                <ChipGroup
-                  name="overall_rating"
-                  options={RATING_OPTIONS}
-                  value={rating}
-                  onChange={setRatingOverride}
-                />
                 <p className="checklist-rating-hint">
                   {auto
-                    ? "체크한 항목으로 계산했어요. 다르게 느끼면 직접 골라주세요."
-                    : "항목을 체크하면 종합 평점이 자동으로 계산돼요."}
+                    ? "체크한 항목으로 계산한 100점 만점 점수예요. 기준을 바꾸려면 ?를 눌러주세요."
+                    : "항목을 체크하면 종합 평점이 계산돼요."}
                 </p>
                 {helpOpen && (
                   <div className="checklist-weights">

@@ -31,9 +31,10 @@ describe("computeOverallScore", () => {
     expect(computeOverallScore(undefined, BUY)).toBeNull();
   });
 
-  it("전부 좋음이면 5점, 전부 나쁨이면 1점", () => {
-    expect(computeOverallScore(allItems(3, 0), BUY)).toEqual({ score: 5, rating: 5 });
-    expect(computeOverallScore(allItems(1, 1), BUY)).toEqual({ score: 1, rating: 1 });
+  it("전부 좋음이면 100점, 전부 나쁨이면 0점", () => {
+    expect(computeOverallScore(allItems(3, 0), BUY)).toEqual({ score: 100, rating: 5 });
+    // 화면 점수는 0점이어도 저장은 1~5 정수라 최소 1점으로 옮긴다.
+    expect(computeOverallScore(allItems(1, 1), BUY)).toEqual({ score: 0, rating: 1 });
   });
 
   it("유해시설은 없음(0)이 있음(1)보다 좋은 쪽으로 계산된다", () => {
@@ -47,12 +48,22 @@ describe("computeOverallScore", () => {
   it("고르지 않은 항목은 계산에서 빠진다", () => {
     // 교통 묶음만 "좋음"으로 채우면, 나머지를 비워둬도 점수가 깎이지 않는다.
     const onlyTransport = { ...EMPTY_CHECKLIST, transport: 3, commute_road: 3 };
-    expect(computeOverallScore(onlyTransport, BUY)).toEqual({ score: 5, rating: 5 });
+    expect(computeOverallScore(onlyTransport, BUY)).toEqual({ score: 100, rating: 5 });
   });
 
   it("한 묶음 안에서는 고른 항목끼리만 평균을 낸다", () => {
     const half = { ...EMPTY_CHECKLIST, transport: 3, commute_road: 1 };
-    expect(computeOverallScore(half, BUY).score).toBe(3); // (3+1)/2 = 2 -> 1~5로 3점
+    expect(computeOverallScore(half, BUY).score).toBe(50); // (3+1)/2 = 2 -> 100점 만점에 50점
+  });
+
+  it("가중치를 어떻게 고쳐도 만점은 100으로 고정된다", () => {
+    // 합이 100이 아닌 가중치(합 250)로도 전부 좋음이면 100점이다.
+    const odd = {
+      transport_group: 50, education_life_group: 50, complex_group: 50,
+      interior_condition_group: 50, facility_group: 50,
+    };
+    expect(computeOverallScore(allItems(3, 0), odd).score).toBe(100);
+    expect(computeOverallScore(allItems(1, 1), odd).score).toBe(0);
   });
 
   it("전세와 매매는 같은 체크에도 다른 점수를 준다", () => {
@@ -67,10 +78,12 @@ describe("computeOverallScore", () => {
     expect(jeonse.score).toBeGreaterThan(buy.score);
   });
 
-  it("화면용 점수는 소수점 한 자리, 저장용 평점은 1~5 정수다", () => {
+  it("화면 점수는 0~100 정수, 저장용 평점은 1~5 정수다", () => {
     const values = { ...EMPTY_CHECKLIST, transport: 3, commute_road: 2 };
     const result = computeOverallScore(values, BUY);
-    expect(result.score).toBe(Math.round(result.score * 10) / 10);
+    expect(Number.isInteger(result.score)).toBe(true);
+    expect(result.score).toBeGreaterThanOrEqual(0);
+    expect(result.score).toBeLessThanOrEqual(100);
     expect(Number.isInteger(result.rating)).toBe(true);
     expect(result.rating).toBeGreaterThanOrEqual(1);
     expect(result.rating).toBeLessThanOrEqual(5);

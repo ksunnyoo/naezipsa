@@ -1,4 +1,4 @@
-// 임장 체크리스트 저장 연결: 종합 평점 자동 계산·직접 선택(EditListingDialog)과,
+// 임장 체크리스트 저장 연결: 종합 평점 계산·표시(EditListingDialog)와,
 // 팝업을 열 때 불러오고 저장할 때 보내는 배선(NaejipsaApp).
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -68,29 +68,14 @@ describe("종합 평점 (EditListingDialog)", () => {
     return onSave;
   }
 
-  it("항목을 고르면 종합 평점이 자동으로 계산돼 보인다", async () => {
+  it("항목을 고르면 종합 평점이 100점 만점으로 계산돼 보인다", async () => {
     renderDialog();
     fireEvent.click(screen.getByRole("button", { name: "임장 체크리스트" }));
-    expect(screen.getByText("항목을 체크하면 종합 평점이 자동으로 계산돼요.")).toBeTruthy();
+    expect(screen.getByText("항목을 체크하면 종합 평점이 계산돼요.")).toBeTruthy();
 
-    // 첫 항목(대중교통 편리)을 "좋음"으로. 고르지 않은 묶음은 계산에서 빠지므로 5점.
+    // 첫 항목(대중교통 편리)을 "좋음"으로. 고르지 않은 묶음은 계산에서 빠지므로 100점.
     fireEvent.click(screen.getAllByLabelText("좋음")[0]);
-    expect(screen.getByText("자동 계산 5점")).toBeTruthy();
-  });
-
-  it("직접 고른 평점이 자동 계산을 이기고, 다시 누르면 자동으로 돌아간다", async () => {
-    const onSave = renderDialog();
-    fireEvent.click(screen.getByRole("button", { name: "임장 체크리스트" }));
-    fireEvent.click(screen.getAllByLabelText("좋음")[0]);
-
-    fireEvent.click(screen.getByLabelText("2")); // 자동 5점이지만 2점으로 고쳐 고른다
-    expect(screen.getByLabelText("2").checked).toBe(true);
-    fireEvent.click(screen.getByRole("button", { name: "저장" }));
-    await waitFor(() => expect(onSave).toHaveBeenCalled());
-    expect(onSave.mock.calls[0][3]).toBe(2);
-
-    fireEvent.click(screen.getByLabelText("2")); // 같은 값을 다시 누르면 자동 계산으로
-    expect(screen.getByLabelText("5").checked).toBe(true);
+    expect(screen.getByText("종합 평점 : 100점")).toBeTruthy();
   });
 
   it("저장하면 체크리스트와 평점을 함께 올려보낸다", async () => {
@@ -107,12 +92,12 @@ describe("종합 평점 (EditListingDialog)", () => {
     expect(rating).toBe(5);
   });
 
-  it("저장해둔 값으로 화면을 채운다", () => {
-    renderDialog({ initialChecklist: { transport: 1 }, initialRating: 4 });
+  it("저장해둔 값으로 화면을 채우고 점수를 다시 계산한다", () => {
+    renderDialog({ initialChecklist: { transport: 1 } });
     fireEvent.click(screen.getByRole("button", { name: "임장 체크리스트" }));
     expect(screen.getAllByLabelText("나쁨")[0].checked).toBe(true);
-    // 자동 계산은 1점인데 저장된 평점은 4점 - 직접 고른 값으로 보고 지킨다.
-    expect(screen.getByLabelText("4").checked).toBe(true);
+    // 저장된 평점을 그대로 쓰지 않고 항목으로 다시 계산한다("나쁨"만 있으면 0점).
+    expect(screen.getByText("종합 평점 : 0점")).toBeTruthy();
   });
 });
 
@@ -140,24 +125,25 @@ describe("서버 저장 배선 (NaejipsaApp)", () => {
     await openChecklist("단지1 수정");
     expect(getInspection).toHaveBeenCalledWith(11); // 화면용 id가 아니라 서버 id로
     expect(screen.getAllByLabelText("좋음")[0].checked).toBe(true);
-    expect(screen.getByLabelText("5").checked).toBe(true);
+    // 저장된 값(교통 두 항목 모두 "좋음")으로 다시 계산해 100점이 된다.
+    expect(screen.getByText("종합 평점 : 100점")).toBeTruthy();
   });
 
   it("저장하면 서버 id로 보내고, 쓰지 않은 메모는 그대로 유지한다", async () => {
     getInspection.mockResolvedValue(record());
-    saveInspection.mockResolvedValue(record({ overall_rating: 3 }));
+    saveInspection.mockResolvedValue(record());
     render(<NaejipsaApp />);
     await login();
 
     await openChecklist("단지1 수정");
-    fireEvent.click(screen.getByLabelText("3")); // 평점을 3점으로 고쳐 고른다
     fireEvent.click(screen.getByRole("button", { name: "저장" }));
 
     await waitFor(() => expect(saveInspection).toHaveBeenCalled());
     const [propertyId, payload] = saveInspection.mock.calls[0];
     expect(propertyId).toBe(11);
     expect(payload.transport).toBe(3);
-    expect(payload.overall_rating).toBe(3);
+    // 화면 100점을 DB가 받는 1~5 자로 옮겨 보낸다(사용자가 고르는 값이 아니다).
+    expect(payload.overall_rating).toBe(5);
     expect(payload.memo).toBe("이전 메모"); // 모바일에서 쓴 메모를 지우지 않는다
     expect(payload).not.toHaveProperty("id"); // 정의되지 않은 키는 422가 된다
     expect(payload).not.toHaveProperty("property_id");
@@ -170,6 +156,6 @@ describe("서버 저장 배선 (NaejipsaApp)", () => {
 
     await openChecklist("단지1 수정");
     expect(screen.getAllByLabelText("좋음")[0].checked).toBe(false);
-    expect(screen.getByText("항목을 체크하면 종합 평점이 자동으로 계산돼요.")).toBeTruthy();
+    expect(screen.getByText("항목을 체크하면 종합 평점이 계산돼요.")).toBeTruthy();
   });
 });

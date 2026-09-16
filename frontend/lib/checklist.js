@@ -246,11 +246,15 @@ export function computeOverallScore(values, weights) {
   }
   if (weightSum === 0) return null;
   const onThree = weighted / weightSum; // 1~3
-  const onFive = ((onThree - 1) / 2) * 4 + 1; // 1~5
+  // 화면 점수는 항상 100점 만점이다(2026-09-16 결정). 가중치 "합"으로 나눠
+  // 정규화하기 때문에, 사용자가 비중을 어떻게 고쳐도 만점은 100으로 고정된다
+  // (합을 100에 맞출 필요가 없는 이유이기도 하다). 체크한 항목이 있는 묶음만
+  // 계산에 들어가므로, 일부만 체크해도 그 안에서의 100점 만점이 된다.
+  const score = Math.round(((onThree - 1) / 2) * 100); // 0~100
   return {
-    // 정수로만 보여주면 가중치를 바꿔도 반올림에 묻혀 티가 안 난다.
-    score: Math.round(onFive * 10) / 10,
-    // DB는 1~5 정수만 받는다(ck_inspections_rating).
-    rating: Math.min(5, Math.max(1, Math.round(onFive))),
+    score,
+    // 저장은 여전히 1~5 정수다(DB의 ck_inspections_rating, 모바일 임장 API 계약).
+    // 화면에서 고르는 값이 아니라 위 점수를 그 자로 옮긴 값이다.
+    rating: Math.min(5, Math.max(1, Math.round(score / 20))),
   };
 }

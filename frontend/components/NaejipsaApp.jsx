@@ -1027,7 +1027,6 @@ export default function NaejipsaApp() {
         open={editingItemId != null}
         item={editingItem}
         initialChecklist={itemChecklists[checklistKey(editingItem)]?.values}
-        initialRating={itemChecklists[checklistKey(editingItem)]?.rating ?? null}
         group={shownGroup}
         profile={profile}
         onSave={handleEditSave}
