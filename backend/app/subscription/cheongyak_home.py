@@ -8,11 +8,13 @@ import os
 import re
 from datetime import datetime
 from zoneinfo import ZoneInfo
-from typing import Dict, List, Optional
+from typing import Dict, Iterable, List, Optional
 from urllib.parse import unquote
 
 import requests
 from dotenv import load_dotenv
+
+from app.subscription.regions import CATEGORIES, CATEGORY_BY_KEY
 
 load_dotenv()
 
@@ -110,10 +112,24 @@ def _fetch_rows(operation_path, per_page):
 
 
 def _parse_date(raw: str) -> str:
-    try:
-        return datetime.strptime(raw, "%Y-%m-%d").strftime("%Y-%m-%d")
-    except (ValueError, TypeError):
-        return raw or ""
+    if raw is None:
+        return ""
+    text = str(raw).strip()
+    if not text:
+        return ""
+    for fmt in ("%Y-%m-%d", "%Y/%m/%d", "%Y.%m.%d"):
+        try:
+            return datetime.strptime(text, fmt).strftime("%Y-%m-%d")
+        except ValueError:
+            pass
+    if "T" in text:
+        try:
+            return datetime.fromisoformat(text.replace("Z", "+00:00")).strftime("%Y-%m-%d")
+        except ValueError:
+            pass
+    if len(text) >= 10 and text[4] == "-" and text[7] == "-":
+        return text[:10]
+    return text
 
 
 def receipt_status(start, end, today=None):
@@ -160,8 +176,44 @@ def fetch_recent_announcements(
     normalized.sort(key=lambda x: x["announced_at"], reverse=True)
     return normalized[:limit]
 
+def _normalized_dates(dates: Iterable[Optional[str]]) -> List[str]:
+    values = []
+    for raw in dates or ():
+        parsed = _parse_date(raw)
+        if parsed:
+            values.append(parsed)
+    return sorted(set(values))
+
+
+def _classify_other_category(row: Dict[str, str]) -> Optional[str]:
+    candidates = []
+    for key in ("HOUSE_DTL_SECD_NM", "HOUSE_SECD_NM", "HOUSE_DTL_SECD", "HOUSE_SECD", "HOUSE_SECD_NM"):
+        value = row.get(key)
+        if value:
+            candidates.append(str(value))
+    if not candidates:
+        return None
+
+    combined = " ".join(candidates)
+    normalized = combined.strip()
+    if not normalized:
+        return None
+
+    if "공공지원민간임대" in normalized or "공공지원" in normalized:
+        return "public-supported-private-rental"
+    if "도시형생활주택" in normalized or "도시형" in normalized:
+        return "urban-living"
+    if "생활숙박" in normalized or "숙박시설" in normalized:
+        return "living-accommodation"
+    if "민간임대" in normalized or "private rental" in normalized.lower():
+        return "private-rental"
+    if "오피스텔" in normalized or "officetel" in normalized.lower():
+        return "officetel"
+    return None
+
+
 def fetch_categorized_announcements(region=None, limit=10):
-    """공식 접수 일정으로 유형을 구분한다. 같은 공고도 1순위/특별공급 일정은 별개다."""
+    """공식 접수 일정으로 유형을 구분한다. 일반공급은 1순위와 2순위를 함께 포함한다."""
     from concurrent.futures import ThreadPoolExecutor
 
     operations = [
@@ -169,40 +221,57 @@ def fetch_categorized_announcements(region=None, limit=10):
         "getRemndrLttotPblancDetail",
         "getUrbtyOfctlLttotPblancDetail",
     ]
+
     def collect(operation):
         return _fetch_rows(f"ApplyhomeInfoDetailSvc/v1/{operation}", 100)
 
     with ThreadPoolExecutor(max_workers=3) as executor:
         apt, remainder, other = list(executor.map(collect, operations))
-    groups = {key: [] for key in ("priority-1", "no-rank", "special", "officetel")}
+    groups = {key: [] for key, _ in CATEGORIES}
 
     def add(row, category, dates):
-        dates = sorted(date for date in dates if date)
+        dates = _normalized_dates(dates)
         if not dates or (region and region not in (row.get("SUBSCRPT_AREA_CODE_NM") or "")):
             return
         item = {name: row.get(field) or "" for name, field in FIELD_MAP.items()}
-        item.update(category=category, receipt_start=dates[0], receipt_end=dates[-1],
-                    receipt_status=receipt_status(dates[0], dates[-1]))
+        item.update(
+            category=category,
+            label=CATEGORY_BY_KEY.get(category, category),
+            receipt_dates=dates,
+            receipt_start=dates[0],
+            receipt_end=dates[-1],
+            receipt_status=receipt_status(dates[0], dates[-1]),
+        )
         groups[category].append(item)
 
     for row in apt:
-        add(row, "priority-1", [row.get(f"GNRL_RNK1_{area}_{suffix}")
-            for area in ("CRSPAREA", "ETC_AREA", "ETC_GG") for suffix in ("RCPTDE", "ENDDE")])
+        general_dates = []
+        for rank in (1, 2):
+            for area in ("CRSPAREA", "ETC_AREA", "ETC_GG"):
+                general_dates.extend([
+                    row.get(f"GNRL_RNK{rank}_{area}_RCPTDE"),
+                    row.get(f"GNRL_RNK{rank}_{area}_ENDDE"),
+                ])
+        add(row, "general", general_dates)
         add(row, "special", [row.get("SPSPLY_RCEPT_BGNDE"), row.get("SPSPLY_RCEPT_ENDDE")])
+
     for row in remainder:
         add(row, "no-rank", [row.get("SUBSCRPT_RCEPT_BGNDE"), row.get("SUBSCRPT_RCEPT_ENDDE")])
+
     for row in other:
-        if row.get("HOUSE_DTL_SECD_NM") == "오피스텔":
-            add(row, "officetel", [row.get("SUBSCRPT_RCEPT_BGNDE"), row.get("SUBSCRPT_RCEPT_ENDDE")])
-    # 그룹마다 최신 공고를 고르게 반환한다. limit은 전체 항목 수다.
+        category = _classify_other_category(row)
+        if category is None:
+            continue
+        dates = [row.get("SUBSCRPT_RCEPT_BGNDE"), row.get("SUBSCRPT_RCEPT_ENDDE")]
+        add(row, category, dates)
+
     for items in groups.values():
-        items.sort(key=lambda item: item["announced_at"], reverse=True)
+        items.sort(key=lambda item: item.get("announced_at") or "", reverse=True)
+
     result = []
-    max_items = limit if limit is not None else sum(len(items) for items in groups.values())
-    for index in range(max_items):
-        for items in groups.values():
-            if index < len(items):
-                result.append(items[index])
-                if len(result) == limit:
-                    return result
+    for category, _ in CATEGORIES:
+        result.extend(groups.get(category, []))
+
+    if limit is not None:
+        return result[:limit]
     return result

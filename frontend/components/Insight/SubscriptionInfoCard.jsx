@@ -1,20 +1,23 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { getInsightItems, sourceLink } from "@/lib/insightApi";
 import { ChevronDownIcon } from "../icons";
 
-// 백엔드가 실제로 만들어내는 분류는 이 4가지뿐이다(도시형생활주택처럼 여기
-// 안 걸리는 유형은 애초에 응답에 들어오지 않는다 - app/subscription/
-// cheongyak_home.py, tests/test_subscription.py 참고). 새 분류가 추가되면
-// 여기에도 같이 추가해야 필터에 나타난다.
-const CATEGORIES = [
-  { key: "priority-1", label: "1순위", className: "is-priority" },
-  { key: "no-rank", label: "무순위/잔여세대", className: "is-no-rank" },
-  { key: "special", label: "특별공급", className: "is-special" },
-  { key: "officetel", label: "오피스텔", className: "is-officetel" },
+const GENERAL_CATEGORY_OPTIONS = [
+  { key: "general-1", label: "일반-1순위", className: "is-general-priority-1", displayLabel: "1순위" },
+  { key: "general-2", label: "일반-2순위", className: "is-general-priority-2", displayLabel: "2순위" },
 ];
-const CATEGORY_MAP = Object.fromEntries(CATEGORIES.map(category => [category.key, category]));
+const CATEGORY_CLASS_MAP = {
+  general: "is-general",
+  special: "is-special",
+  "no-rank": "is-no-rank",
+  officetel: "is-officetel",
+  "urban-living": "is-urban-living",
+  "private-rental": "is-private-rental",
+  "living-accommodation": "is-living-accommodation",
+  "public-supported-private-rental": "is-public-supported-private-rental",
+};
 const STATUS_LABELS = { closed: "마감", open: "접수 중", upcoming: "접수 예정" };
 // 분류/지역 선택 팝업이 아래로 펼쳐질 공간이 부족하면(.subscription-region-options의
 // CSS max-height 240px + 트리거와의 간격 6px) 그만큼 뷰포트 아래쪽 여유가 없다는
@@ -43,11 +46,21 @@ export default function SubscriptionInfoCard({ refreshKey = "", referenceSizeId 
   const [regionDropUp, setRegionDropUp] = useState(false);
   const regionPicker = useRef(null);
   const regionNames = ["서울", "경기", "인천", "강원", "충북", "충남", "세종", "대전", "전북", "전남", "광주", "경북", "대구", "경남", "울산", "부산", "제주"];
+  const categoryOptions = useMemo(() => {
+    if (!Array.isArray(state.groups)) return [];
+    const baseOptions = state.groups
+      .map(group => ({ key: group.category, label: group.label || "미분류", className: CATEGORY_CLASS_MAP[group.category] || "is-default" }))
+      .filter(category => category.key && category.label);
+    const hasGeneral = baseOptions.some(category => category.key === "general");
+    const generalOptions = hasGeneral ? GENERAL_CATEGORY_OPTIONS.map(option => ({ ...option, key: option.key, label: option.label, className: option.className })) : [];
+    return [...generalOptions, ...baseOptions.filter(category => category.key !== "general")];
+  }, [state.groups]);
+  const categoryMap = Object.fromEntries(categoryOptions.map(category => [category.key, category]));
   const categoryLabel = selectedCategories.length === 0
     ? "분류선택"
     : selectedCategories.length === 1
-      ? CATEGORY_MAP[selectedCategories[0]]?.label
-      : `${CATEGORY_MAP[selectedCategories[0]]?.label} 외 ${selectedCategories.length - 1}개`;
+      ? categoryMap[selectedCategories[0]]?.label || categoryMap[selectedCategories[0]]?.displayLabel || "분류"
+      : `${categoryMap[selectedCategories[0]]?.label || categoryMap[selectedCategories[0]]?.displayLabel || "분류"} 외 ${selectedCategories.length - 1}개`;
   const regionLabel = selectedRegions.length === 0
     ? "지역선택"
     : selectedRegions.length === 1
@@ -84,13 +97,26 @@ export default function SubscriptionInfoCard({ refreshKey = "", referenceSizeId 
     return () => controller.abort();
   }, [attempt, refreshKey, referenceSizeId, excludeClosed]);
 
-  // 분류(1순위/무순위/특별공급/오피스텔)·지역별로 나뉘어 오는 응답을 하나의
-  // 목록으로 펼친다 - 항목마다 자기 분류를 칩으로 보여주고, 전체를
-  // 모집공고일 최신순으로 정렬한다(그룹으로 나눠 보여주지 않는다).
+  useEffect(() => {
+    const validKeys = new Set(categoryOptions.map(category => category.key));
+    setSelectedCategories(prev => {
+      const next = prev.filter(category => validKeys.has(category));
+      return next.length === prev.length ? prev : next;
+    });
+  }, [categoryOptions]);
+
+  // API가 내려준 분류·지역 그룹을 하나의 목록으로 펼친다. 각 항목은
+  // 자기 카테고리 칩을 표시하고, 전체를 모집공고일 기준으로 정렬한다.
   const items = state.groups
     .flatMap(group => group.regions.flatMap(region => region.items))
     .filter(item => !excludeClosed || ["upcoming", "open"].includes(item.receipt_status))
-    .filter(item => selectedCategories.length === 0 || selectedCategories.includes(item.category))
+    .filter(item => {
+      if (selectedCategories.length === 0) return true;
+      return selectedCategories.some(category => {
+        if (category === "general-1" || category === "general-2") return item.category === "general";
+        return item.category === category;
+      });
+    })
     .filter(item => selectedRegions.length === 0 || selectedRegions.includes(item.region))
     .sort((a, b) => (b.announced_at || "").localeCompare(a.announced_at || ""));
 
@@ -107,22 +133,19 @@ export default function SubscriptionInfoCard({ refreshKey = "", referenceSizeId 
               <span className={`subscription-region-chevron ${categoryOpen ? "is-open" : ""}`} aria-hidden="true"><ChevronDownIcon /></span>
             </button>
             {categoryOpen && <div id="subscription-category-options" className={"subscription-region-options" + (categoryDropUp ? " is-drop-up" : "")} role="group" aria-label="청약 분류 선택">
-              <button type="button" className={`subscription-region-option subscription-region-option--all ${selectedCategories.length === 0 ? "is-active" : ""}`} onClick={() => setSelectedCategories([])}>전체 분류</button>
-              {CATEGORIES.map(category => {
-                const checked = selectedCategories.includes(category.key);
+              <button type="button" className={`subscription-region-option ${selectedCategories.length === 0 ? "is-active" : ""}`} onClick={() => setSelectedCategories([])}>전체 분류</button>
+              {categoryOptions.map(option => {
+                const checked = selectedCategories.includes(option.key);
+                const toggleCategory = () => setSelectedCategories(prev => (checked ? prev.filter(value => value !== option.key) : [...prev, option.key]));
                 return (
-                  <label key={category.key} className={`subscription-region-option subscription-region-checkbox ${checked ? "is-active" : ""}`}>
-                    <input
-                      type="checkbox"
-                      className="subscription-checkbox-input"
-                      checked={checked}
-                      onChange={() => setSelectedCategories(prev => (checked ? prev.filter(value => value !== category.key) : [...prev, category.key]))}
-                    />
-                    <span className={"subscription-checkbox-box" + (checked ? " is-checked" : "")}>
-                      {checked && <img className="subscription-checkbox-icon" src="/check-icon.png" alt="" />}
-                    </span>
-                    <span>{category.label}</span>
-                  </label>
+                  <button
+                    key={`${option.key}-${option.label}`}
+                    type="button"
+                    className={`subscription-region-option ${checked ? "is-active" : ""}`}
+                    onClick={toggleCategory}
+                  >
+                    <span>{option.label}</span>
+                  </button>
                 );
               })}
             </div>}
@@ -162,7 +185,17 @@ export default function SubscriptionInfoCard({ refreshKey = "", referenceSizeId 
           : state.error ? <p className="news-message">현재 정보를 확인할 수 없습니다.</p>
             : items.length === 0 ? <p className="news-message">조건에 맞는 데이터가 없습니다.</p>
               : items.map(item => {
-                const category = CATEGORY_MAP[item.category];
+                const category = item.category === "general" && selectedCategories.length === 1 && (selectedCategories[0] === "general-1" || selectedCategories[0] === "general-2")
+                  ? {
+                    key: selectedCategories[0],
+                    label: selectedCategories[0] === "general-1" ? "1순위" : "2순위",
+                    className: selectedCategories[0] === "general-1" ? "is-general-priority-1" : "is-general-priority-2",
+                  }
+                  : categoryMap[item.category] || {
+                    key: item.category,
+                    label: item.label || item.category || "기타",
+                    className: CATEGORY_CLASS_MAP[item.category] || "is-default",
+                  };
                 return (
                   <a key={`${item.announcement_no}-${item.category}`} href={sourceLink(item.source_url)} target="_blank" rel="noopener noreferrer" className="subscription-row">
                     <div className="subscription-row-top">
