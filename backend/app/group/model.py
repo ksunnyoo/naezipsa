@@ -17,14 +17,25 @@
 
 groups.owner_user_id -> profiles.id 외래키는 dashboard_items.user_id와 같은 방식으로
 모델에 선언하지 않고 마이그레이션에서 직접 만든다(alembic/env.py의 HAND_MANAGED_CONSTRAINTS 참고).
+
+그룹 공유 링크(Phase 5, group_share_links)는 로그인 없이 그룹 하나를 읽기 전용으로 보여준다.
+
+  - 링크를 열 때마다 그 그룹의 지금 후보를 읽는다(스냅샷 아님).
+  - 토큰 원문은 저장하지 않고 SHA-256 hash만 저장한다. 원문은 만들 때 한 번만 응답한다.
+  - 공유 중지는 행을 지우지 않고 revoked_at만 채운다. 그룹을 지우면 링크도 지워진다(CASCADE).
+  - 링크를 열어도 후보를 복사하거나 그룹에 참여시키지 않는다. 공동 참여는 보류다.
 """
-from sqlalchemy import BigInteger, Column, DateTime, ForeignKey, Index, Integer, String, Uuid, func
+from sqlalchemy import (
+    BigInteger, Column, DateTime, ForeignKey, Index, Integer, String, UniqueConstraint, Uuid, func,
+)
 
 from app.core.database import Base
 
 # 한 사용자가 만들 수 있는 그룹 수. 기존 화면의 그룹 목록(한 줄 4개 x 2줄)과 같게 둔다.
 MAX_GROUPS_PER_USER = 8
 MAX_GROUP_NAME_LENGTH = 30
+# 그룹 하나에 동시에 살아 있는 공유 링크 수. 공유할 때마다 새 링크를 만들므로 끝없이 쌓이지 않게 막는다.
+MAX_ACTIVE_SHARE_LINKS_PER_GROUP = 20
 
 
 class Group(Base):
@@ -61,3 +72,25 @@ class GroupItem(Base):
         primary_key=True,
     )
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class GroupShareLink(Base):
+    """그룹 공유 링크 하나. 링크를 가진 사람은 로그인 없이 그 그룹을 읽기만 한다."""
+
+    __tablename__ = "group_share_links"
+    __table_args__ = (
+        UniqueConstraint("token_hash", name="uq_group_share_links_token_hash"),
+        Index("ix_group_share_links_group_id", "group_id"),
+    )
+
+    id = Column(BigInteger().with_variant(Integer, "sqlite"), primary_key=True, autoincrement=True)
+    group_id = Column(
+        BigInteger,
+        ForeignKey("groups.id", name="fk_group_share_links_group", ondelete="CASCADE"),
+        nullable=False,
+    )
+    # 토큰 원문의 SHA-256 hex. DB 값이 새어도 이 값으로는 링크를 열 수 없다.
+    token_hash = Column(String(64), nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    # 공유를 중지한 시각. 값이 있으면 이 링크로는 더 이상 볼 수 없다.
+    revoked_at = Column(DateTime(timezone=True), nullable=True)

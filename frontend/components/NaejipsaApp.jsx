@@ -28,6 +28,9 @@ import {
   removeGroupItem,
   createDashboardShare,
   getDashboardShare,
+  createGroupShareLink,
+  revokeGroupShareLinks,
+  getSharedGroup,
 } from "@/lib/api";
 import {
   toCreateItemPayload,
@@ -111,8 +114,10 @@ export default function NaejipsaApp() {
   // 그룹 요청이 끝나기 전에 Enter/클릭이 반복돼 같은 요청이 두 번 가는 것을 막는다.
   const groupBusyRef = useRef(false);
 
-  // 공유 - URL의 ?share=<token>을 열었을 때 보여줄 미리보기 상태.
+  // 공유 - URL의 ?share=<token>(매물 스냅샷)이나 ?groupShare=<token>(그룹 링크)을 열었을 때 보여줄
+  // 미리보기 상태. sharePreviewGroupName은 그룹 링크일 때만 그룹 이름이 들어간다.
   const [sharePreviewItems, setSharePreviewItems] = useState([]);
+  const [sharePreviewGroupName, setSharePreviewGroupName] = useState(null);
   const [importModalOpen, setImportModalOpen] = useState(false);
 
   // 늦은 프로필 조회가 기존 후보 입력창·그룹/공유 팝업 위에 새 모달을 겹쳐 열지
@@ -191,29 +196,38 @@ export default function NaejipsaApp() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
-  // 공유 링크로 들어온 경우(?share=<token>) 미리보기를 띄운다. 로그인
-  // 여부와 무관하게 동작해야 하므로(게스트도 공유받은 걸 볼 수 있어야 함)
-  // user에 의존하지 않는 별도 마운트 1회 효과로 둔다.
+  // 공유 링크로 들어온 경우 미리보기를 띄운다. 로그인 여부와 무관하게 동작해야
+  // 하므로(게스트도 공유받은 걸 볼 수 있어야 함) user에 의존하지 않는 별도 마운트
+  // 1회 효과로 둔다.
+  //   ?share=<token>       전체 후보를 떠 둔 매물 스냅샷
+  //   ?groupShare=<token>  그룹 링크(Phase 5) - 열 때마다 그 그룹의 지금 후보. 동·호수까지 보인다.
+  // 어느 쪽이든 링크를 열기만 해서는 아무것도 저장하지 않는다. "내 목록에 추가"를 눌러야 복사한다.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const token = params.get("share");
-    if (!token) return;
+    const groupToken = params.get("groupShare");
+    const snapshotToken = params.get("share");
+    if (!groupToken && !snapshotToken) return;
 
     let cancelled = false;
-    getDashboardShare(token)
+    const preview = groupToken ? getSharedGroup(groupToken) : getDashboardShare(snapshotToken);
+    preview
       .then((res) => {
         if (cancelled) return;
         setSharePreviewItems(res.items);
+        setSharePreviewGroupName(groupToken ? res.name : null);
         setImportModalOpen(true);
       })
       .catch(() => {
         if (cancelled) return;
-        toast.show("존재하지 않거나 만료된 공유 링크예요.");
+        toast.show(groupToken
+          ? "존재하지 않거나 공유가 중지된 그룹 링크예요."
+          : "존재하지 않거나 만료된 공유 링크예요.");
       })
       .finally(() => {
         // 새로고침해도 다시 뜨지 않도록 쿼리스트링에서 지운다.
         const url = new URL(window.location.href);
         url.searchParams.delete("share");
+        url.searchParams.delete("groupShare");
         window.history.replaceState({}, "", url);
       });
 
@@ -435,9 +449,15 @@ export default function NaejipsaApp() {
   // 링크를 "여는" 건(아래 handleImportShare) 게스트도 가능 - 공유는 받는
   // 쪽 입장에서 로그인 여부와 무관하게 봐야 의미가 있다.
 
+  // 헤더 공유 버튼. 그룹을 보고 있으면 그 그룹 링크를, 전체 후보면 기존 매물 스냅샷 링크를 만든다.
+  const shareBusyRef = useRef(false);
   async function handleShare() {
     if (!user) {
       toast.show("로그인 후 이용할 수 있어요");
+      return;
+    }
+    if (shownGroup) {
+      await handleShareGroup(shownGroup);
       return;
     }
     if (dashboardItems.length === 0) {
@@ -451,14 +471,56 @@ export default function NaejipsaApp() {
       toast.show("공유 링크를 만들지 못했어요. 잠시 후 다시 시도해주세요.");
       return;
     }
-    const url = `${window.location.origin}${window.location.pathname}?share=${token}`;
+    await copyShareLink(`?share=${token}`, "공유 링크를 복사했어요");
+  }
+
+  // 그룹 공유 링크(Phase 5). 받은 사람은 로그인 없이 이 그룹의 지금 후보를 본다.
+  // 누를 때마다 새 링크를 만들고(토큰은 서버에 hash로만 남아 다시 보여줄 수 없다),
+  // 그룹 메뉴의 공유 아이콘(공유 중지)으로 이 그룹 링크를 한꺼번에 끊는다.
+  async function handleShareGroup(group) {
+    if (group.itemIds.length === 0) {
+      toast.show("그룹에 후보가 없어요. 후보를 넣은 뒤 공유해주세요.");
+      return;
+    }
+    if (shareBusyRef.current) return;
+    shareBusyRef.current = true;
+    let token;
+    try {
+      ({ token } = await createGroupShareLink(group.id));
+    } catch (err) {
+      toast.show(err.message);
+      return;
+    } finally {
+      shareBusyRef.current = false;
+    }
+    setGroups((gs) => gs.map((g) =>
+      g.id === group.id ? { ...g, share_link_count: (g.share_link_count ?? 0) + 1 } : g));
+    await copyShareLink(
+      `?groupShare=${token}`,
+      `"${group.name}" 그룹 링크를 복사했어요. 받은 사람은 이 그룹의 최신 후보를 볼 수 있어요`,
+    );
+  }
+
+  async function copyShareLink(query, message) {
+    const url = `${window.location.origin}${window.location.pathname}${query}`;
     try {
       await navigator.clipboard.writeText(url);
-      toast.show("공유 링크를 복사했어요");
+      toast.show(message);
     } catch {
       // 클립보드 접근이 막힌 환경(HTTP·권한 거부 등) - 링크 자체는 이미
       // 만들어졌으니 직접 복사할 수 있게 토스트에 그대로 보여준다.
       toast.show(`공유 링크: ${url}`);
+    }
+  }
+
+  // 그룹 메뉴의 공유 아이콘 - 이 그룹으로 만든 링크를 모두 끊는다. 이미 보낸 링크로는 더 이상 볼 수 없다.
+  async function handleStopGroupShare(groupId) {
+    try {
+      await revokeGroupShareLinks(groupId);
+      setGroups((gs) => gs.map((g) => (g.id === groupId ? { ...g, share_link_count: 0 } : g)));
+      toast.show("공유를 중지했어요. 보낸 링크로는 더 이상 볼 수 없어요");
+    } catch (err) {
+      toast.show(err.message);
     }
   }
 
@@ -470,8 +532,7 @@ export default function NaejipsaApp() {
     const remaining = MAX_DASHBOARD_ITEMS - dashboardItems.length;
     if (remaining <= 0) {
       toast.show(`관심 매물은 최대 ${MAX_DASHBOARD_ITEMS}개까지 추가할 수 있어요`);
-      setImportModalOpen(false);
-      setSharePreviewItems([]);
+      handleImportCancel();
       return;
     }
     const toImport = sharePreviewItems.slice(0, remaining);
@@ -497,8 +558,7 @@ export default function NaejipsaApp() {
         );
       } catch {
         toast.show("공유받은 매물을 추가하지 못했어요. 잠시 후 다시 시도해주세요.");
-        setImportModalOpen(false);
-        setSharePreviewItems([]);
+        handleImportCancel();
         return;
       }
       try {
@@ -533,13 +593,14 @@ export default function NaejipsaApp() {
         ? `${toImport.length}개를 추가했어요 (최대 ${MAX_DASHBOARD_ITEMS}개라 ${skipped}개는 제외됨)`
         : `${toImport.length}개의 매물을 추가했어요`,
     );
-    setImportModalOpen(false);
-    setSharePreviewItems([]);
+    handleImportCancel();
   }
 
+  // 미리보기 닫기(닫기·추가 완료 공통). Esc 처리 effect에서도 부르므로 state setter만 쓴다.
   function handleImportCancel() {
     setImportModalOpen(false);
     setSharePreviewItems([]);
+    setSharePreviewGroupName(null);
   }
 
   // 체크박스(비교 차트·AI 분석에 포함할지) 토글. 로그인 상태면 서버에도 저장해
@@ -770,6 +831,7 @@ export default function NaejipsaApp() {
             onAddTo: handleAddToGroup,
             onRename: handleRenameGroup,
             onDelete: handleDeleteGroup,
+            onStopShare: handleStopGroupShare,
           }}
           onShare={handleShare}
         />
@@ -835,6 +897,7 @@ export default function NaejipsaApp() {
       <ImportShareModal
         open={importModalOpen}
         items={sharePreviewItems}
+        groupName={sharePreviewGroupName}
         onImport={handleImportShare}
         onCancel={handleImportCancel}
       />

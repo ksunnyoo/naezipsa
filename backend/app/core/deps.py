@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from app.core.security import CurrentUser, get_current_user
 from app.core.database import get_db
 from app.user.model import Profile
+from app.user.nickname import random_nickname
 
 
 def get_current_profile(
@@ -46,14 +47,16 @@ def get_current_profile(
 
     profile = db.get(Profile, user_uuid)
     if profile is not None:
+        if profile.nickname is None:
+            # 닉네임이 비어 있는 계정(랜덤 닉네임 도입 전 이메일 가입 등)은 이 시점에 채운다.
+            profile.nickname = random_nickname()
+            db.commit()
+            db.refresh(profile)
         return profile
 
-    # 소셜 로그인이면 제공자가 준 이름을 닉네임 초기값으로 쓴다.
-    # 온보딩에서 이름을 다시 입력하지 않아도 되고, 사용자가 원하면 바꿀 수 있다.
-    # 이메일 가입은 display_name이 없어서 None으로 남고 온보딩에서 받는다.
-    nickname = (user.display_name or "")[:30] or None
-
-    profile = Profile(id=user_uuid, email=user.email or "", nickname=nickname)
+    # 처음 들어온 사용자는 "반포사는호랑이" 같은 랜덤 닉네임으로 시작한다(app/user/nickname.py).
+    # 소셜 로그인 제공자의 이름(실명일 수 있음)은 닉네임으로 저장하지 않는다. 원하면 마이페이지에서 바꾼다.
+    profile = Profile(id=user_uuid, email=user.email or "", nickname=random_nickname())
     db.add(profile)
     try:
         db.commit()

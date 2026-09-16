@@ -26,6 +26,7 @@ def test_applied_revisions_keep_their_parents():
     assert set(script.get_revision("b449723601b1").down_revision) == {"667be58b68d8", "c71f9a2d830e"}
     assert script.get_revision("16bbbf4cc3a5").down_revision == "b449723601b1"
     assert script.get_revision("ff9db2ef90e4").down_revision == "16bbbf4cc3a5"
+    assert script.get_revision("d755235ab9bc").down_revision == "ff9db2ef90e4"
 
 
 def test_every_branch_is_reachable_from_head():
@@ -33,4 +34,5 @@ def test_every_branch_is_reachable_from_head():
     script = _script()
     head = script.get_heads()[0]
     ancestors = {rev.revision for rev in script.walk_revisions(base="base", head=head)}
-    assert {"258caef7f856", "667be58b68d8", "c71f9a2d830e", "b449723601b1", "16bbbf4cc3a5", "ff9db2ef90e4"} <= ancestors
+    assert {"258caef7f856", "667be58b68d8", "c71f9a2d830e", "b449723601b1", "16bbbf4cc3a5", "ff9db2ef90e4",
+            "d755235ab9bc", "3c9e1a7b52d4"} <= ancestors

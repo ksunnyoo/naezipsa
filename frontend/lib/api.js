@@ -9,14 +9,16 @@ import { supabase } from "@/lib/supabaseClient";
 // 연결돼 있다.
 //
 // API_BASE_URL은 .env.local의 NEXT_PUBLIC_API_BASE_URL을 쓴다(로컬 기본값은
-// backend README 기준 http://localhost:8000/api/v1). NEXT_PUBLIC_ 접두어라
+// http://127.0.0.1:8000/api/v1). NEXT_PUBLIC_ 접두어라
 // 브라우저에도 노출되지만 그냥 API 주소일 뿐이라 문제 없음.
+// localhost가 아니라 127.0.0.1인 이유: Windows에서 localhost는 IPv6(::1)부터 시도하는데
+// 개발 서버(uvicorn)는 127.0.0.1에만 떠 있어, 새 연결마다 약 0.2초씩 늦어진다(2026-09-16 측정).
 //
 // 2026-09: 로그인 사용자별 관심 매물 저장(A-03~A-08, GET/POST/PATCH/DELETE
 // /dashboard/items)도 여기 연결돼 있다. 이 그룹만 로그인이 필수라
 // authHeaders()로 Supabase 세션 토큰을 Authorization 헤더에 실어 보낸다.
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000/api/v1";
+  process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000/api/v1";
 
 // 로그인 상태면 현재 Supabase 세션의 access token을 Authorization 헤더로
 // 실어 보낸다. 비로그인 상태면 빈 객체 - /dashboard 계열은 이 헤더 없이
@@ -304,7 +306,8 @@ async function groupRequest(path, { method = "GET", body } = {}) {
   return res.json();
 }
 
-// 내 그룹 목록. 반환 형태: { groups: [{ id, name, item_count, created_at, updated_at }], count, max_count }
+// 내 그룹 목록. 반환 형태: { groups: [{ id, name, item_count, share_link_count, created_at, updated_at }], count, max_count }
+// share_link_count는 지금 살아 있는 공유 링크 수(0이면 공유하지 않는 그룹).
 export function getGroups() {
   return groupRequest("");
 }
@@ -337,6 +340,32 @@ export function addGroupItems(groupId, itemIds) {
 // 그룹에서 빼기. 후보는 그대로 남는다.
 export function removeGroupItem(groupId, itemId) {
   return groupRequest(`/${groupId}/items/${itemId}`, { method: "DELETE" });
+}
+
+// --- 그룹 공유 링크 (Phase 5) ---------------------------------------------------
+// 백엔드 app/group/router.py 참고. 링크는 그룹 주인만 만들고 끊는다. 받은 사람은 로그인 없이
+// 그 그룹의 지금 후보를 본다(getSharedGroup). 링크를 열기만 해서는 아무것도 저장되지 않는다.
+
+// 공유 링크 만들기. 반환 형태: { id, token, created_at } - token은 이 응답에서만 받을 수 있다.
+export function createGroupShareLink(groupId) {
+  return groupRequest(`/${groupId}/share-links`, { method: "POST" });
+}
+
+// 공유 중지 - 이 그룹으로 만든 링크를 모두 끊는다. 반환 형태: { revoked_count }
+export function revokeGroupShareLinks(groupId) {
+  return groupRequest(`/${groupId}/share-links`, { method: "DELETE" });
+}
+
+// 그룹 공유 링크 열람 - 로그인 불필요(authHeaders 안 붙임). 공유를 중지하면 바로 안 보여야 하므로
+// 브라우저 캐시를 쓰지 않는다. 반환 형태: { name, items: [{ size_id, dong, ho, complex_name, metrics, ... }], count }
+export async function getSharedGroup(token) {
+  const res = await fetch(`${API_BASE_URL}/shared/groups/${encodeURIComponent(token)}`, { cache: "no-store" });
+  if (!res.ok) {
+    const error = new Error(`get shared group failed with status ${res.status}`);
+    error.status = res.status;
+    throw error;
+  }
+  return res.json();
 }
 
 // --- 공유 -------------------------------------------------------------------

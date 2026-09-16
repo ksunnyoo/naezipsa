@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 from app.core.deps import get_current_profile
 from app.core.database import get_db
 from app.user.model import Profile
+from app.user.nickname import random_nickname
 from app.user.schema import ProfileResponse, ProfileUpdateRequest
 
 router = APIRouter(prefix="/users/me", tags=["users"])
@@ -43,7 +44,7 @@ def update_my_profile(
     """A-02: 내 프로필 수정. PATCH라서 보낸 필드만 바꾼다.
 
         {"nickname": "홍길동"}                -> 닉네임만 변경
-        {"nickname": null}                    -> 닉네임 삭제
+        {"nickname": null}                    -> 새 랜덤 닉네임(닉네임을 비워 두지 않는다)
         {"service_purposes": ["move", "buy"]} -> 이용 목적만 변경
         {}                                    -> 아무것도 안 바꿈
 
@@ -53,6 +54,9 @@ def update_my_profile(
     # ("안 보냄"과 "null 보냄"을 구분하기 위함)
     for field, value in payload.model_dump(exclude_unset=True).items():
         setattr(profile, field, value)
+    # 닉네임을 지우면 빈 채로 두지 않고 새 랜덤 닉네임을 준다(app/user/nickname.py).
+    if profile.nickname is None:
+        profile.nickname = random_nickname()
 
     db.commit()
     db.refresh(profile)

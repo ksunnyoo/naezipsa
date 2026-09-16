@@ -29,6 +29,7 @@ vi.mock("@/lib/api", () => ({
   getGroups: vi.fn(), getGroup: vi.fn(), createGroup: vi.fn(), renameGroup: vi.fn(), deleteGroup: vi.fn(),
   addGroupItems: vi.fn(), removeGroupItem: vi.fn(),
   createDashboardShare: vi.fn(), getDashboardShare: vi.fn(),
+  createGroupShareLink: vi.fn(), revokeGroupShareLinks: vi.fn(), getSharedGroup: vi.fn(),
 }));
 vi.mock("@/components/Dashboard/DashboardCharts", () => ({ default: () => null }));
 vi.mock("@/components/Insight/InsightPanel", () => ({ default: () => null }));

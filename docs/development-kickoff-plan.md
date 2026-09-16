@@ -1,7 +1,13 @@
 # 개발 실행 계획 — 기존 구조 유지
 
-갱신일: 2026-09-15
-현재 단계: **Phase 3 보완(정렬 순서 저장) — 구현·격리 검증·공용 DB 적용·main 병합(PR #16, #17) 완료, 수동 확인 대기**
+갱신일: 2026-09-16
+현재 단계: **Phase 5 공유(읽기 전용 그룹 링크) — 구현·격리 검증·공용 DB 적용(`3c9e1a7b52d4`) 완료, PR 병합·수동 확인 대기.** Phase 3 보완(정렬 순서 저장)은 main 병합 완료, 수동 확인 대기.
+
+랜덤 닉네임·속도 개선(2026-09-16): 사용자 요청으로 처리했다. 아래 "닉네임·속도 개선" 참고. DB 변경 없음.
+
+Phase 5 착수(2026-09-16, 사용자 지시): 그룹 공유 링크(읽기 전용)만 구현했다. 공개 범위는 동·호수까지, 공동 참여는 구현 계획만 두고 보류다. 아래 "Phase 5 변경 요약" 참고.
+
+임장 체크리스트(2026-09-16, 사용자 결정): 임장 체크리스트를 따로 공유하는 기능(Phase 7)은 만들지 않는다. 체크리스트가 DB에 점수별로 저장되는지 확인한 결과는 아래 "임장 체크리스트 저장 확인" 참고.
 
 설계 준비(2026-09-15): 사용자 요청으로 [정렬 순서 저장·공유/공동참여 설계](ordering-and-sharing-design.md)를 추가했다. 현재 `7ed9923` 구현을 기준으로 정렬 API·migration 순서, 그룹/기존 스냅샷 공유 구분, membership·원본 소유권, 완료 기준을 정리한 **구현 전 제안**이다. 정렬 보완과 Phase 5 구현은 착수하지 않았다.
 
@@ -69,9 +75,9 @@
 | 2 프로필 + AI | 기존 GET/PATCH `/api/v1/users/me/profile` 사용. `service_purposes === null`은 onboarding, `[]`는 skip 완료, 값 존재는 완료. 목적에 따라 AI 강조점 조정. 나이로 소득·가족·구매력 추론 금지. profile null 동작·응답 스키마 유지 | 구현·자동 검증·수동 확인 완료 |
 | 3 checked | 기존 auth 브랜치의 checked 수정안을 필요한 diff만 반영. Alembic, model/schema/service 응답, 프론트 toggle 저장·복원. PATCH에 checked만 보내고 다른 detail 필드 보존 | checked 저장·복원 구현·자동 검증·수동 확인 완료. 정렬 순서 저장(보완)은 구현·격리 검증·공용 DB 적용(`d755235ab9bc`)·main 병합(PR #17) 완료, 수동 확인 대기 |
 | 4 groups | `groups`, `group_items`. `POST /api/v1/groups`의 optional `item_ids`로 빈 그룹·선택 후보 그룹·기존 그룹 후보로 새 그룹 생성. clone 전용 API 없음 | 구현·자동 검증·PR #13 main 병합·공용 DB 적용(`ff9db2ef90e4`) 완료. 그룹 메뉴 후속 수정은 PR #16으로 main 병합. 체크리스트 전체 수동 확인 기록 없음 |
-| 5 공유/공동참여 | group 단위 공유. public viewer는 read-only. `allow_join=true`일 때 로그인 후 join. membership 기반 그룹 조회와 원본 item owner 기반 수정 권한 분리 | 미착수 |
+| 5 공유/공동참여 | group 단위 공유. public viewer는 read-only. `allow_join=true`일 때 로그인 후 join. membership 기반 그룹 조회와 원본 item owner 기반 수정 권한 분리 | 읽기 전용 그룹 링크 구현·격리 검증·공용 DB 적용(`3c9e1a7b52d4`) 완료, PR 병합·수동 확인 대기. 공동 참여는 사용자 결정으로 보류(구현 계획만) |
 | 6 그룹 AI | 기존 `/dashboard/insight`에 그룹 item IDs 전달. 내 후보만 검사 유지. 공동 그룹 전체 AI는 후속 범위 | 미착수 |
-| 7 임장 공유 | 현재 브랜치에 임장 DB/CRUD가 있을 때만 시작. 없으면 "선행 임장 데이터 모델이 없어 구현 대기" 보고 | 선행 구조 미확인 / 미착수 |
+| 7 임장 공유 | 현재 브랜치에 임장 DB/CRUD가 있을 때만 시작. 없으면 "선행 임장 데이터 모델이 없어 구현 대기" 보고 | 하지 않음(2026-09-16 사용자 결정). 임장 DB·저장 API는 있으나 웹 체크리스트와 연결 전 — "임장 체크리스트 저장 확인" 참고 |
 
 Phase 2 문구: “간단한 정보를 알려주시면, 내집사가 더 나에게 맞는 AI 인사이트를 제공할 수 있어요.”
 
@@ -600,3 +606,221 @@ offline `--sql`에서 실행되는 문장은 다음뿐이다.
   - 타인 후보가 섞인 그룹의 체크·드래그 제한과 AI 분석 범위(내 후보만)
   - 기존 스냅샷 공유(`?share=`)와 그룹 공유 링크의 진입 구분
 - [ ] 사용자의 다음 Phase 착수 지시. **다음 Phase는 시작하지 않았다.**
+
+## 닉네임·속도 개선 (2026-09-16)
+
+사용자 요청으로 처리했다. 작업 브랜치는 `feat/nickname-and-speed`(main `81889b7`에서 분기)다. DB 변경은 없다.
+
+**랜덤 닉네임**
+
+- 처음 로그인하면 "반포사는호랑이"처럼 수식어 38개 중 하나와 동물 30개 중 하나를 붙인 닉네임으로 시작한다([backend/app/user/nickname.py](../backend/app/user/nickname.py)).
+- 어색한 조합은 버리고 다시 뽑는다. 자연스러운 조합은 1,086개다.
+  - 붙는 자리에서 같은 소리가 반복되는 조합(받침은 무시): "반포사는사자", "든든한하마"
+  - 붙이면서 부적절한 표현이 생기는 조합
+  - 4자 미만·10자 초과
+- 소셜 로그인 제공자의 이름(실명일 수 있음)은 더 이상 닉네임 초기값으로 저장하지 않는다.
+- 닉네임이 비어 있던 기존 계정은 다음 API 요청 때 한 번 채운다. `{"nickname": null}` 저장도 빈 값 대신 새 랜덤 닉네임을 준다. 온보딩 닉네임 칸에 "비워 두면 랜덤 닉네임이 만들어져요" 안내를 넣었다.
+
+**느린 화면 측정과 조치**
+
+| 느린 곳 | 측정 | 원인 | 조치 |
+|---|---|---|---|
+| AI 분석 | 16.8초, 가끔 503("요청이 많음") | 모델이 답을 쓰기 전에 오래 "생각"함(생각 토큰 2,165개) | `thinkingLevel: low` → 약 6초. 503·429면 1초 뒤 한 번만 다시 시도 |
+| 모든 API 요청 | 새 연결마다 +0.22초 | Windows에서 `localhost`는 IPv6(::1)부터 시도하는데 개발 서버는 127.0.0.1에만 떠 있음 | 프론트 기본 주소와 `.env.example`을 `127.0.0.1`로. 각자 `.env.local`도 바꿔야 함 |
+| 첫 화면 거시지표·랭킹·뉴스·청약 | 차트 2.6초 이내, 뉴스·청약 3~4초, 거시지표 다른 기간 미리받기 5~6.6초 | 외부 공공 API 자체가 느림(R-ONE/KOSIS 36개월 4.4초). 브라우저는 한 서버에 동시에 6개만 요청하는데 첫 화면 요청이 약 31개. 개발 서버가 코드 저장으로 재시작될 때마다 6시간 캐시가 비워짐 | 코드 변경 없음. 숨겨진 인사이트 탭의 뉴스·청약 지연 로딩, 캐시 유지 방식은 담당자(정정화님·진수님·B)와 협의할 후속 |
+| 그룹 새로 만들기 | API 자체는 22~150ms | 첫 화면 요청이 몰린 동안 줄을 서서 기다림 | 첫 화면 요청이 줄면 함께 해소 |
+
+그 밖에 DB 왕복 8ms, 인증 API 22~150ms, 랭킹 계산 0.1~0.4초로 병목이 아니었다.
+
+### 수정 파일
+
+| 파일 | 변경 내용 |
+|---|---|
+| [backend/app/user/nickname.py](../backend/app/user/nickname.py) | 신규. 단어 목록·어색한 조합 걸러내기 |
+| [backend/app/core/deps.py](../backend/app/core/deps.py), [backend/app/user/router.py](../backend/app/user/router.py) | 새 프로필·빈 닉네임 계정·닉네임 비우기에 랜덤 닉네임 |
+| [backend/app/insight/llm.py](../backend/app/insight/llm.py) | 생각 단계 낮춤, 일시 과부하 1회 재시도 |
+| [frontend/lib/api.js](../frontend/lib/api.js), [insightApi.js](../frontend/lib/insightApi.js), [frontend/.env.example](../frontend/.env.example) | API 기본 주소 127.0.0.1 |
+| [frontend/components/Modal/ProfileOnboardingModal.jsx](../frontend/components/Modal/ProfileOnboardingModal.jsx) | 닉네임 칸 안내 문구 |
+| [backend/tests/test_nickname.py](../backend/tests/test_nickname.py), [test_insight_llm.py](../backend/tests/test_insight_llm.py) | 신규 테스트 |
+| [backend/tests/test_profile_onboarding.py](../backend/tests/test_profile_onboarding.py), [test_user_api.py](../backend/tests/test_user_api.py) | 닉네임 기대값을 랜덤으로(실DB `test_user_api.py`는 수정만 하고 실행하지 않음) |
+
+### 테스트
+
+- 백엔드 신규: 닉네임 규칙 12개(생성 결과가 항상 자연스러운 조합, 어색한 조합 거부, 다양성, 대체 닉네임), LLM 호출 5개(생각 설정 전송, 503·429 한 번 재시도, 두 번 실패 시 중단, 다른 오류는 재시도 안 함). 프로필 2개(닉네임 비우기, 빈 닉네임 기존 계정 채우기).
+- 백엔드 전체 격리 테스트 **316 passed**. 실DB 후보를 비우는 `auth` 픽스처를 쓰는 `test_insight.py`·`test_user_api.py`는 실행하지 않았다.
+- 실제 Gemini 한 번 호출: 바뀐 설정으로 200 응답(짧은 질문 1.8초).
+- 프론트 76개 통과, `eslint` 오류 0개(기존 `<img>` 경고 16개), `next build` 성공.
+
+### 수동 확인 필요
+
+1. 새 계정으로 로그인 → 마이페이지에 랜덤 닉네임이 보이는지, 닉네임을 지우고 저장하면 새 랜덤 닉네임이 되는지 확인한다.
+2. 후보 6개로 AI 분석 → 이전(15초 이상)보다 짧은지, 분석 내용 품질이 떨어지지 않았는지 확인한다.
+3. `frontend/.env.local`의 `NEXT_PUBLIC_API_BASE_URL`을 `http://127.0.0.1:8000/api/v1`로 바꾸고 새로고침한 뒤 첫 화면이 빨라졌는지 확인한다.
+
+## Phase 5 변경 요약 (그룹 공유 링크, 읽기 전용)
+
+2026-09-16 사용자 지시로 착수했다. 작업 브랜치는 `feat/phase5-group-share`로, `feat/nickname-and-speed` 위에 쌓여 있다.
+
+**착수 전 사용자 결정**
+
+| 항목 | 결정 |
+|---|---|
+| 그룹 링크로 공개할 정보 | 동·호수까지 공개. 메모·임장 기록·계정 정보는 비공개 |
+| 공동 참여(join) | 구현 계획만 두고 보류 |
+| 공동 그룹 후보 수, 탈퇴·추방 처리 | 공동 참여 보류로 이번 범위 아님 |
+| 공유 단위(기존 결정) | 그룹을 보고 있으면 그룹 링크, 전체 후보면 기존 매물 스냅샷 |
+
+**설계 문서 4장 대비 차이와 최소 변경**
+
+1. 공개 필드: 설계 제안은 상세 동·호 제외였으나 사용자 결정으로 동·호수를 공개한다. 후보 id·메모·상태·체크·순서·등록 시각·계정 정보는 내보내지 않는다.
+2. `allow_join`, `group_members`, `group_items.added_by_user_id`, join·회원 API는 만들지 않았다(보류). 나중에 `allow_join`을 추가할 때 기존 링크는 기본값 false로 채우면 된다.
+3. 링크 목록 조회·링크별 회수 API 대신, 그룹 응답의 `share_link_count`와 그룹 단위 "공유 중지"로 줄였다. 화면에 필요한 것은 "공유 중인지"와 "끊기"뿐이다.
+4. 공유 버튼을 누를 때마다 새 링크를 만든다. 원문은 hash로만 저장해 다시 보여줄 수 없기 때문이다. 그룹당 살아 있는 링크는 20개까지다.
+5. 받는 사람 화면은 기존 스냅샷 공유와 같은 미리보기 모달을 쓴다. 설계의 "읽기 전용 대시보드(차트·임시 체크)"는 만들지 않았다. "내 목록에 추가"는 기존처럼 내 후보로 복사한다.
+6. 기존 `dashboard_shares`와 `?share=` 링크는 그대로다.
+
+**구현**
+
+- **백엔드**
+  - `group_share_links`: id, group_id(FK CASCADE), token_hash(UNIQUE), created_at, revoked_at. `group_id` 인덱스.
+  - 토큰은 `secrets.token_urlsafe(24)`(32자)이고 DB에는 SHA-256만 저장한다.
+  - `POST /api/v1/groups/{group_id}/share-links` → 201 `{id, token, created_at}`. 남의·없는 그룹 404, 상한 409.
+  - `DELETE /api/v1/groups/{group_id}/share-links` → 200 `{revoked_count}`. 다시 보내면 0. 남의 그룹 404.
+  - `GET /api/v1/shared/groups/{token}` → 로그인 불필요, `{name, items, count}`.
+    - 없거나 중지된 토큰, 129자 이상: 404
+    - `Cache-Control: no-store`
+    - 그룹 주인의 후보 순서
+    - 프로필 생성·DB 쓰기 없음
+  - 그룹 목록·상세 응답에 `share_link_count`를 추가했다. 그룹을 지우면 링크도 지운다.
+- **프론트**
+  - 그룹을 보는 중 헤더 공유 → 그룹 링크를 만들고 `?groupShare=` 주소를 복사한다. 전체 후보면 기존 스냅샷이다. 후보가 없는 그룹은 안내만 한다.
+  - 그룹 메뉴: 공유 중인 그룹 줄에만 메인색 공유 아이콘이 보인다. 누르면 공유 중지(마우스를 올리면 빨간색).
+  - `?groupShare=` 링크 열기 → 로그인 없이 "공유받은 그룹" 미리보기(그룹 이름, 단지·동·호수·면적) → 닫기 / 내 목록에 추가. 주소에서 토큰을 지운다. 없거나 중지된 링크는 안내만 한다.
+  - 기존 스냅샷 미리보기에도 동·호수가 함께 보인다(스냅샷 응답에 원래 있던 값).
+
+### 수정 파일
+
+| 파일 | 변경 내용 |
+|---|---|
+| [backend/alembic/versions/20260916_1030_3c9e1a7b52d4_create_group_share_links.py](../backend/alembic/versions/20260916_1030_3c9e1a7b52d4_create_group_share_links.py) | 신규 마이그레이션(부모 `d755235ab9bc`) |
+| [backend/app/group/model.py](../backend/app/group/model.py), [schema.py](../backend/app/group/schema.py), [service.py](../backend/app/group/service.py), [router.py](../backend/app/group/router.py) | 링크 모델·공개 DTO·생성/중지/열람, 그룹 응답 링크 수, 그룹 삭제 시 링크 삭제 |
+| [backend/app/main.py](../backend/app/main.py) | 공개 열람 라우터 등록 한 줄 |
+| [frontend/lib/api.js](../frontend/lib/api.js) | `createGroupShareLink`, `revokeGroupShareLinks`, `getSharedGroup` |
+| [frontend/components/NaejipsaApp.jsx](../frontend/components/NaejipsaApp.jsx) | 공유 버튼 분기, `?groupShare=` 미리보기, 공유 중지 |
+| [frontend/components/Dashboard/GroupBar.jsx](../frontend/components/Dashboard/GroupBar.jsx), [Header.jsx](../frontend/components/Header.jsx), [globals.css](../frontend/app/globals.css) | 공유 중 아이콘·공유 버튼 툴팁 |
+| [frontend/components/Modal/ImportShareModal.jsx](../frontend/components/Modal/ImportShareModal.jsx) | 그룹 이름·동·호수 표시, 빈 그룹이면 추가 버튼 비활성 |
+| [backend/tests/test_group_shares.py](../backend/tests/test_group_shares.py), [frontend/tests/group-share.test.jsx](../frontend/tests/group-share.test.jsx) | 신규 테스트 |
+| [backend/tests/test_groups.py](../backend/tests/test_groups.py), [test_dashboard_order.py](../backend/tests/test_dashboard_order.py), [test_alembic_chain.py](../backend/tests/test_alembic_chain.py), [frontend/tests/group-api.test.js](../frontend/tests/group-api.test.js), [dashboard-groups.test.jsx](../frontend/tests/dashboard-groups.test.jsx) | 픽스처 새 테이블, 적용된 `d755235ab9bc` 부모 고정, API·mock 추가 |
+
+### DB migration
+
+새 리비전 `3c9e1a7b52d4`(부모 `d755235ab9bc`, head 1개)다. **2026-09-16 사용자 승인 후 공용 DB에 적용했다.**
+
+offline `--sql`에서 실행되는 문장은 다음뿐이다.
+
+- `group_share_links` 테이블 생성(외래키 CASCADE·UNIQUE 포함)
+- `group_id` 인덱스 생성
+- `alembic_version` 갱신
+
+기존 테이블 변경은 없다. downgrade는 링크 테이블만 지운다(이미 보낸 링크는 모두 끊긴다).
+
+- **적용 결과(읽기 전용 확인):**
+  - DB 위치: 적용 전 `d755235ab9bc` → 적용 후 `3c9e1a7b52d4`(head).
+  - 새 테이블 0행. 컬럼·외래키(CASCADE)·UNIQUE·인덱스가 설계대로 생겼고, 모델과 DB 비교 차이는 0건이다.
+  - 기존 행 수는 적용 전과 같다(프로필 4, 후보 10, 그룹 3, 그룹 관계 5, 스냅샷 공유 18, 임장 0).
+  - 실제 PostgreSQL에서 그룹 목록 쿼리(후보 수·링크 수)가 계정별로 맞게 돌았다. 로컬 서버에서 없는 토큰 열람은 404, 비로그인 링크 생성은 401이다.
+- **적용 전 주의(기록):** 이 브랜치 코드는 그룹 목록·상세·삭제에서 `group_share_links`를 읽어, 적용 전에는 그룹 메뉴가 실패한다. 그래서 승인 전까지 로컬 작업 트리를 `feat/nickname-and-speed`로 되돌려 두었고, 적용 후 이 브랜치로 옮겼다.
+- **혼용:** 새 테이블만 추가했으므로 이 코드를 받지 않은 main 서버도 그대로 동작한다. PR은 `feat/nickname-and-speed` → `feat/phase5-group-share` 순서로 병합한다.
+
+### 테스트
+
+- **백엔드 신규 `tests/test_group_shares.py` 13개** (임시 SQLite, 외래키 검사 켬):
+  - 로그인 없이 열람, 공개 필드만 나감(메모·계정 id 없음), `no-store`, 주인의 후보 순서
+  - DB에는 hash만 저장, hash 값으로는 열리지 않음
+  - 링크를 만든 뒤 후보 추가·빼기·이름·호가 변경·후보 삭제가 다음 열람에 반영
+  - 공유 중지: 그 그룹 링크만 모두 끊김, 다시 보내면 0, 새로 공유한 링크만 열림
+  - 그룹 목록·상세의 링크 수(후보 수가 부풀지 않음)
+  - 남의 그룹 404, 비로그인 생성·중지 401
+  - 그룹 삭제 시 링크 삭제·후보 유지
+  - 없는·긴·공백 토큰 404
+  - 그룹당 링크 상한 409, 중지 후 다시 생성
+  - 열람 전후 프로필·후보·그룹 관계·링크가 그대로
+  - 마이그레이션 컬럼·UNIQUE·인덱스·외래키가 모델과 같고 downgrade는 링크 테이블만 삭제
+- **백엔드 전체:** **329 passed**. 실DB `auth` 픽스처를 쓰는 `test_insight.py`·`test_user_api.py`는 실행하지 않았다.
+- **프론트 신규 9개:**
+  - 그룹 보기에서 공유 → 그룹 링크 생성·`?groupShare=` 복사·공유 아이콘 표시
+  - 전체 후보 공유는 기존 스냅샷
+  - 빈 그룹은 링크를 만들지 않음
+  - 공유 아이콘 → 그 그룹만 공유 중지
+  - 비로그인 링크 열기 → 그룹 이름·동·호수 미리보기, 주소에서 토큰 제거, 저장 호출 없음
+  - 없는·중지된 링크 안내
+  - 로그인 상태에서 내 목록에 추가 → 동·호수까지 복사
+  - API 경로·로그인 헤더, 열람은 헤더 없이 `no-store`·실패 status
+- **프론트 전체:** **85 passed**, `eslint` 오류 0개(기존 `<img>` 경고 16개), `next build` 성공.
+- **격리 테스트로 확인하지 못한 것:** 실제 PostgreSQL에서의 행 잠금. 링크 수 하위 쿼리는 DB 적용 후 실제 PostgreSQL에서 읽기 전용으로 확인했다.
+
+### 수동 확인 필요
+
+`3c9e1a7b52d4`는 공용 DB에 적용됐다. 이 브랜치 코드로 서버를 띄운 뒤 확인한다.
+
+1. 그룹을 보는 중 공유 → 복사된 주소를 시크릿 창(비로그인)에서 연다. 그룹 이름·단지·동·호수가 보이고 메모는 보이지 않는지 확인한다.
+2. 원래 창에서 그룹에 후보를 넣거나 빼고 호가를 고친 뒤, 시크릿 창에서 링크를 다시 열면 반영되는지 확인한다.
+3. 그룹 메뉴의 공유 아이콘을 누른 뒤 링크를 다시 열면 "존재하지 않거나 공유가 중지된 그룹 링크예요."가 뜨는지 확인한다.
+4. 전체 후보에서 공유한 기존 스냅샷 링크(`?share=`)가 그대로 동작하는지 확인한다.
+5. 다른 계정 창에서 그룹 링크 → 내 목록에 추가 → 동·호수까지 복사되고, 주인의 그룹·후보는 그대로인지 확인한다.
+6. 그룹을 삭제하면 그 그룹 링크가 열리지 않는지 확인한다.
+
+### 공동 참여 구현 계획 (보류)
+
+사용자 결정으로 구현하지 않았다. 재개할 때의 순서만 남긴다.
+
+1. **먼저 정할 것**
+   - 공동 그룹 후보 총수(설계 제안: 6개)
+   - 참여자 제거·탈퇴 시 그 사람이 넣은 그룹 관계를 지울지
+   - 남의 후보가 섞인 그룹의 체크·드래그·AI 분석 범위(설계 제안: 임시 체크, 드래그 없음, 내 후보만 분석)
+   - CTA 문구 위치: “함께 비교하고 의견을 남기고 싶다면 회원가입하고 공동 참여해보세요.”
+2. **DB(별도 migration)**
+   - `group_share_links.allow_join` BOOLEAN NOT NULL DEFAULT false
+   - `group_members`(group_id, user_id 복합 PK, role 'editor', joined_at, CASCADE)
+   - `group_items.added_by_user_id`(기존 행은 `dashboard_items.user_id`로 채움)
+3. **API**
+   - `POST /shared/groups/{token}/join`(로그인 + `allow_join`)
+   - 회원 목록·제거·탈퇴
+   - 그룹 목록에 참여 그룹·내 역할·소유 그룹 수
+   - 권한은 설계 4.3 표를 따른다. 원본 후보 수정은 원본 주인만 한다.
+4. **프론트**
+   - 공유할 때 "참여 허용" 선택
+   - 남의 후보 카드의 편집·삭제 숨김
+   - 그룹 목록에 참여 그룹 표시
+
+### 다음 단계 전에 확인할 것
+
+- [x] `3c9e1a7b52d4` 공용 DB 적용(2026-09-16, 사용자 승인).
+- [ ] 위 수동 확인.
+- [x] 두 브랜치(`feat/nickname-and-speed`, `feat/phase5-group-share`)를 원격에 push.
+- [ ] PR 병합: `feat/nickname-and-speed` → `feat/phase5-group-share` 순서.
+- [ ] 공동 참여 착수 여부와 위 결정 항목.
+- [ ] 사용자의 다음 Phase 착수 지시. **Phase 6(그룹 AI)은 시작하지 않았다.**
+
+## 임장 체크리스트 저장 확인 (2026-09-16)
+
+사용자 요청으로 코드와 공용 DB를 읽기만 해서 확인했다. 코드는 바꾸지 않았다. 임장 체크리스트를 따로 공유하는 기능은 사용자 결정으로 만들지 않는다.
+
+| 구분 | 현재 상태 |
+|---|---|
+| DB | `property_inspections`에 후보별로 18개 항목 점수(항목마다 컬럼, 1~3 / 유해시설 0~1), 종합 평점(1~5, 필수), 메모를 저장하는 구조가 있다. 저장할 때마다 새 기록이 쌓인다. 공용 DB에 적용돼 있고 확인 시점 0행 |
+| 백엔드 API | `POST /api/v1/properties/{id}/inspection`으로 저장한다(내 후보만, 격리 테스트 있음). **저장한 기록을 다시 읽는 API는 없다** |
+| 웹 체크리스트 화면 | 매물 수정 창의 "체크리스트 작성"(진수님 `b3b14aa`). 항목 키 18개와 점수 규칙은 DB와 같다. **서버로 보내지 않고 화면 메모리에만 둔다.** 새로고침·재로그인하면 사라진다 |
+
+**결론:** 점수별로 저장할 DB와 저장 API는 준비돼 있지만(PR #11 `b6c4b11`), 웹 체크리스트와 연결되지 않아 실제로는 저장되지 않는다.
+
+**사용자 결정(2026-09-16):** 연결 방식은 담당자(체크리스트 화면·임장 백엔드)가 정한다. 현황·API 계약·선택지·주의점을 [임장 체크리스트 저장 연결 명세](inspection-checklist-handover.md)로 정리해 전달한다. 코드는 바꾸지 않았다.
+
+연결하려면 정할 것(선택지와 영향은 명세 5장):
+
+1. 종합 평점(1~5): DB·API는 필수인데 웹 체크리스트에 입력칸이 없다. 화면에 추가할지, 백엔드에서 선택값으로 바꿀지.
+2. 다시 열었을 때 이어서 보기: 가장 최근 기록을 읽는 API가 필요하다.
+3. 저장 방식: 저장할 때마다 새 기록(방문 이력)으로 둘지, 후보당 기록 하나를 고칠지.
+4. 임장 기록이 생긴 후보는 삭제가 막히고(409) 제외 상태로만 숨길 수 있다. 화면 안내가 필요하다.
+5. 웹에는 후보 상태(제외)를 바꾸는 화면이 없고, 삭제 실패 시 서버 안내(409) 대신 일반 실패 문구만 보인다.
+6. 체크리스트 캐시가 화면용 id 기준이라, 목록을 다시 불러오면 다른 매물에 붙을 수 있다. 연결할 때 서버 id 기준으로 둔다.

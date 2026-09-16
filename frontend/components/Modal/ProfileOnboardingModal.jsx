@@ -79,7 +79,7 @@ export default function ProfileOnboardingModal({ profile, onSave, mode = "onboar
           <p className="profile-intro" id="profile-intro">간단한 정보를 알려주시면, 내집사가 더 나에게 맞는 AI 인사이트를 제공할 수 있어요.</p>
           {editing && email && <p className="profile-intro">로그인 계정: {email}</p>}
           <label className="auth-field">닉네임 (선택)
-            <input value={nickname} onChange={(event) => setNickname(event.target.value)} maxLength={30} disabled={pending} autoComplete="nickname" />
+            <input value={nickname} onChange={(event) => setNickname(event.target.value)} maxLength={30} disabled={pending} autoComplete="nickname" placeholder="비워 두면 랜덤 닉네임이 만들어져요" />
           </label>
           <label className="auth-field">나이대 (선택)
             <select value={ageGroup} onChange={(event) => setAgeGroup(event.target.value)} disabled={pending}>

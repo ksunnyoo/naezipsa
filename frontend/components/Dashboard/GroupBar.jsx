@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { DocumentIcon, PencilIcon, PlusIcon, XIcon } from "../icons";
+import { DocumentIcon, PencilIcon, PlusIcon, ShareIcon, XIcon } from "../icons";
 
 // <GroupBar /> : 헤더 "그룹" 버튼을 누르면 그 아래 말풍선 모양으로 펼쳐지는 그룹 메뉴.
 // 그룹에 관한 동작은 모두 여기서 한다(목록 위에 따로 버튼 줄이나 이름 입력 모달을 두지 않는다).
@@ -11,6 +11,7 @@ import { DocumentIcon, PencilIcon, PlusIcon, XIcon } from "../icons";
 //     추가          카드에서 체크한 후보를 이 그룹에 넣는다.
 //     연필          그 자리에서 이름을 고친다(Enter·입력칸 밖 클릭 저장, Esc 취소).
 //     X             그룹만 삭제한다. 후보는 전체 후보에 남는다.
+//     공유 아이콘   그룹 링크를 공유하고 있을 때만 보인다. 누르면 이 그룹 링크를 모두 끊는다(공유 중지).
 //   새 그룹 만들기  이름을 묻지 않고 지금 보이는 목록의 체크한 후보로 바로 만들고,
 //                   새 줄의 이름 입력칸을 열어 둔다(그대로 두면 기본 이름 유지).
 //
@@ -118,6 +119,18 @@ export default function GroupBar({ menu }) {
                       <DocumentIcon />
                       <span className="group-row-name">{group.name}</span>
                       <span className="group-row-count">{group.item_count}</span>
+                    </button>
+                  )}
+                  {!editing && group.share_link_count > 0 && (
+                    <button
+                      type="button"
+                      tabIndex={0}
+                      className="group-row-share"
+                      title="공유 중 · 누르면 공유를 중지해요"
+                      aria-label={`"${group.name}" 그룹 공유 중지`}
+                      onClick={() => menu.onStopShare(group.id)}
+                    >
+                      <ShareIcon />
                     </button>
                   )}
                   <button

@@ -19,7 +19,7 @@ from app.core.database import get_db
 from app.core.deps import get_current_profile
 from app.dashboard.model import DashboardItem
 from app.dashboard.service import ItemMetricsCache
-from app.group.model import MAX_GROUPS_PER_USER, Group, GroupItem
+from app.group.model import MAX_GROUPS_PER_USER, Group, GroupItem, GroupShareLink
 from app.inspection.model import PropertyInspection
 from app.main import app
 from app.property.model import ComplexMaster, RegulationZone, SizeMaster
@@ -57,6 +57,7 @@ def env(tmp_path):
     PropertyInspection.__table__.create(engine)
     Group.__table__.create(engine)
     GroupItem.__table__.create(engine)
+    GroupShareLink.__table__.create(engine)
 
     with Session(engine) as db:
         db.add(ComplexMaster(id=100, apt_nm="테스트 아파트"))

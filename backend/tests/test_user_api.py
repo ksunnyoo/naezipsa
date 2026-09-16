@@ -31,7 +31,7 @@ def test_profile_is_created_on_first_call(client, auth, test_user):
 def test_profile_fields_are_all_optional(client, auth):
     """온보딩을 건너뛴 사용자도 서비스를 쓸 수 있어야 한다."""
     body = client.get(PROFILE_URL, headers=auth).json()
-    assert body["nickname"] is None
+    assert body["nickname"]                      # 닉네임은 랜덤으로 채워져 시작한다
     assert body["age_group"] is None
     assert body["service_purposes"] is None
 
@@ -59,10 +59,14 @@ def test_profile_partial_update_keeps_other_fields(client, auth):
 
 
 def test_profile_explicit_null_clears_field(client, auth):
-    """null을 명시적으로 보내면 지운다. '안 보냄'과 구분된다."""
-    client.patch(PROFILE_URL, headers=auth, json={"nickname": "홍길동"})
-    res = client.patch(PROFILE_URL, headers=auth, json={"nickname": None})
-    assert res.json()["nickname"] is None
+    """null을 명시적으로 보내면 지운다. '안 보냄'과 구분된다.
+
+    닉네임은 비워 두지 않고 새 랜덤 닉네임으로 바뀐다.
+    """
+    client.patch(PROFILE_URL, headers=auth, json={"nickname": "홍길동", "age_group": "30s"})
+    res = client.patch(PROFILE_URL, headers=auth, json={"nickname": None, "age_group": None})
+    assert res.json()["age_group"] is None
+    assert res.json()["nickname"] not in (None, "홍길동")
 
 
 def test_profile_rejects_invalid_enum(client, auth):

@@ -49,6 +49,7 @@ app.include_router(subscription_router, prefix="/api/v1")
 app.include_router(user_router.router, prefix="/api/v1")
 app.include_router(dashboard_router.router, prefix="/api/v1")
 app.include_router(group_router.router, prefix="/api/v1")
+app.include_router(group_router.shared_router, prefix="/api/v1")  # 그룹 공유 링크 열람 (로그인 불필요)
 app.include_router(insight_router.router, prefix="/api/v1")
 app.include_router(inspection_router.router, prefix="/api/v1")
 

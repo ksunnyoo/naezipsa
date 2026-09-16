@@ -4056,6 +4056,33 @@ select:focus-visible {
   width: 12px;
   height: 12px;
 }
+/* 그룹 줄의 공유 아이콘 - 그룹 링크를 공유하고 있을 때만 메인색으로 보인다. 누르면 공유를 중지한다. */
+.group-row-share {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--radius-full);
+  background: transparent;
+}
+.group-row-share:hover {
+  background: var(--color-surface-subtle);
+}
+.group-row-share svg {
+  width: 13px;
+  height: 13px;
+}
+.group-row-share svg circle,
+.group-row-share svg path {
+  stroke: var(--color-primary);
+}
+.group-row-share:hover svg circle,
+.group-row-share:hover svg path {
+  stroke: var(--color-danger);
+}
 .group-row-rename {
   flex: 1;
   min-width: 0;

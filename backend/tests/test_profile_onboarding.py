@@ -14,11 +14,19 @@ from app.core import security
 from app.core.database import get_db
 from app.core.errors import register_exception_handlers
 from app.user.model import Profile
+from app.user.nickname import ANIMALS, MODIFIERS
 from app.user.router import router
 
 
 PROFILE_URL = "/api/v1/users/me/profile"
 TEST_SECRET = "phase2-profile-test-secret-at-least-32-bytes"
+
+
+def is_random_nickname(value):
+    """랜덤 닉네임 모양(수식어 + 동물)인지."""
+    return isinstance(value, str) and any(
+        value.startswith(modifier) and value[len(modifier):] in ANIMALS for modifier in MODIFIERS
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -99,7 +107,8 @@ def test_first_profile_has_null_purposes_for_onboarding(profile_api):
     body = response.json()
     assert body["user_id"] == str(user_id)
     assert body["service_purposes"] is None
-    assert body["nickname"] is None
+    # 닉네임은 비워 두지 않고 랜덤으로 시작한다.
+    assert is_random_nickname(body["nickname"])
     assert body["age_group"] is None
     assert set(body) == {
         "user_id", "nickname", "age_group", "service_purposes", "created_at", "updated_at",
@@ -129,7 +138,8 @@ def test_saved_profile_remains_complete_on_next_request(profile_api, purposes):
 def test_skip_persists_empty_list_instead_of_null(profile_api):
     user_id = uuid.uuid4()
     headers = profile_api.headers(user_id)
-    assert profile_api.client.get(PROFILE_URL, headers=headers).json()["service_purposes"] is None
+    first = profile_api.client.get(PROFILE_URL, headers=headers).json()
+    assert first["service_purposes"] is None
 
     skipped = profile_api.client.patch(
         PROFILE_URL, headers=headers, json={"service_purposes": []},
@@ -140,7 +150,8 @@ def test_skip_persists_empty_list_instead_of_null(profile_api):
     restored = profile_api.client.get(PROFILE_URL, headers=profile_api.headers(user_id))
     assert restored.status_code == 200
     assert restored.json()["service_purposes"] == []
-    assert restored.json()["nickname"] is None
+    # 건너뛰기는 처음 받은 랜덤 닉네임을 바꾸지 않는다.
+    assert restored.json()["nickname"] == first["nickname"]
     assert restored.json()["age_group"] is None
 
 
@@ -232,3 +243,27 @@ def test_invalid_profile_values_keep_existing_state_and_error_format(profile_api
     assert error["code"] == "VALIDATION_ERROR"
     assert error["details"][0]["field"].startswith(field)
     assert profile_api.client.get(PROFILE_URL, headers=headers).json()["service_purposes"] == []
+
+
+def test_clearing_nickname_gives_a_new_random_nickname(profile_api):
+    headers = profile_api.headers(uuid.uuid4())
+    named = profile_api.client.patch(PROFILE_URL, headers=headers, json={"nickname": "내이름"})
+    assert named.json()["nickname"] == "내이름"
+
+    cleared = profile_api.client.patch(PROFILE_URL, headers=headers, json={"nickname": None})
+
+    assert cleared.status_code == 200
+    assert is_random_nickname(cleared.json()["nickname"])
+    assert profile_api.client.get(PROFILE_URL, headers=headers).json()["nickname"] == cleared.json()["nickname"]
+
+
+def test_existing_profile_without_nickname_gets_a_random_nickname_once(profile_api):
+    user_id = uuid.uuid4()
+    headers = profile_api.headers(user_id)
+    profile_api.client.get(PROFILE_URL, headers=headers)
+    profile_api.rows[user_id]["nickname"] = None  # 랜덤 닉네임 도입 전에 만들어진 계정
+
+    filled = profile_api.client.get(PROFILE_URL, headers=headers).json()["nickname"]
+
+    assert is_random_nickname(filled)
+    assert profile_api.client.get(PROFILE_URL, headers=headers).json()["nickname"] == filled

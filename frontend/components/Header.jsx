@@ -92,6 +92,7 @@ export default function Header({
               tabIndex={0}
               className="nav-icon-btn"
               aria-label="공유하기"
+              title={groupMenu?.activeGroup ? "보고 있는 그룹 링크 공유" : "관심 매물 공유"}
               onClick={onShare}
             >
               <ShareIcon />
