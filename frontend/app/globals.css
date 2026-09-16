@@ -4494,13 +4494,6 @@ select:focus-visible {
   font-weight: 600;
 }
 
-/* 응답에 새로 생긴 분류(프론트가 색을 모르는 유형)의 기본 칩 색. 색을 모른다고
-   칩을 숨기면 화면에서 분류가 통째로 사라지므로 기본 색으로라도 보여준다. */
-.subscription-item-category.is-other {
-  background-color: #94a3b8;
-  color: #ffffff;
-}
-
 /* 종합 평점 옆 "?" - 점수가 어떻게 나왔는지 설명하고 그 자리에서 기준을 고친다. */
 .checklist-rating-help-btn {
   margin-left: 6px;

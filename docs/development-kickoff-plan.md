@@ -1147,3 +1147,16 @@ ALTER TABLE groups ADD COLUMN scoring_weights JSON;
 파일: [frontend/lib/checklist.js](../frontend/lib/checklist.js), [EditListingDialog.jsx](../frontend/components/EditListingDialog.jsx), [InterestCard.jsx](../frontend/components/Dashboard/InterestCard.jsx), [NaejipsaApp.jsx](../frontend/components/NaejipsaApp.jsx).
 
 테스트: 전부 좋음 100점·전부 나쁨 0점, **합이 250인 가중치로도 만점이 100**, 한 묶음 안 평균(50점), 화면 0~100 정수·저장 1~5 정수, 저장된 값을 다시 계산해 보여주는지. 프론트 **128 passed**, `eslint` 오류 0개, `next build` 성공.
+
+## 청약 분류 변경을 PR #22에 넘김 (2026-09-16)
+
+앞의 "청약 분류를 응답 기반으로"에서 팀원 작업을 찾지 못해 직접 고쳤는데, 그 뒤 **PR #22**(`jjh32116-rgb`, "청약정보-분류선택 청약홈 카테고리로 리스트업")가 올라왔다. 내용을 보니 같은 문제를 **더 넓게** 고쳤다.
+
+- 분류를 4개 → **8개**: 일반공급·특별공급·무순위/잔여세대·오피스텔·도시형생활주택·민간임대·생활숙박시설·공공지원민간임대.
+- `priority-1` → `general`로 이름을 바꾸되 옛 이름 별칭(`LEGACY_CATEGORY_ALIASES`)을 남겨 호환을 지켰다.
+- 일반공급은 화면에서 **1순위/2순위**로 나눠 고를 수 있다.
+- 프론트가 응답에서 분류를 읽는 방식은 우리 변경과 같고, 모르는 분류는 `is-default`로 처리한다.
+
+**결정:** 두 변경이 [SubscriptionInfoCard.jsx](../frontend/components/Insight/SubscriptionInfoCard.jsx)에서 충돌하므로(실제 병합 시도로 확인), **이 브랜치의 청약 변경을 main 상태로 되돌린다.** 그 파일을 더 이상 건드리지 않으면 #22가 머지된 뒤 이 브랜치는 충돌 없이 올라간다. 함께 넣었던 `is-other` 칩 색과 우리 구현을 검증하던 테스트도 뺐다 - #22는 `is-default`를 쓰므로 그 테스트는 헛된 실패가 된다.
+
+**남는 것:** 커밋 `8588b0a`의 청약 부분은 역할이 끝났다. 되돌린 내용 중 #22에 없는 개선(다시 불러오는 동안 이전 그룹 유지, 사라진 선택 무시)이 필요하면 #22 머지 후 별도로 올린다.
