@@ -16,9 +16,23 @@ ALIASES = {
     "제주도": "제주", "제주특별자치도": "제주",
 }
 CATEGORIES = (
-    ("priority-1", "1순위"), ("no-rank", "무순위/잔여세대"),
-    ("special", "특별공급"), ("officetel", "오피스텔"),
+    ("general", "일반공급"),
+    ("special", "특별공급"),
+    ("no-rank", "무순위/잔여세대"),
+    ("officetel", "오피스텔"),
+    ("urban-living", "도시형생활주택"),
+    ("private-rental", "민간임대"),
+    ("living-accommodation", "생활숙박시설"),
+    ("public-supported-private-rental", "공공지원민간임대"),
 )
+CATEGORY_BY_KEY = dict(CATEGORIES)
+LEGACY_CATEGORY_ALIASES = {"priority-1": "general"}
+
+
+def normalize_category(category):
+    if category is None:
+        return None
+    return LEGACY_CATEGORY_ALIASES.get(category, category)
 
 
 def normalize_region(value):
@@ -65,17 +79,20 @@ def group_announcements(items, preferred_regions, limit_per_region=3):
         distance = proximity(region)
         return (1, distance if distance is not None else float("inf"), region)
 
+    grouped = {category: {} for category, _ in CATEGORIES}
+    for item in items:
+        category = normalize_category(item.get("category"))
+        if category not in grouped:
+            grouped.setdefault(category, {})
+        region = normalize_region(item.get("region"))
+        grouped.setdefault(category, {}).setdefault(region, []).append({**item, "region": region, "region_label": f"[{region}]"})
+
     categories = []
     for category, label in CATEGORIES:
-        # 관심 지역은 해당 공고가 없어도 표시할 수 있도록 빈 그룹을 유지한다.
-        groups = {region: [] for region in preferred}
-        for item in items:
-            if item.get("category") == category:
-                region = normalize_region(item.get("region"))
-                groups.setdefault(region, []).append({**item, "region": region, "region_label": f"[{region}]"})
+        groups = grouped.get(category, {})
         regions = []
-        for region in sorted(groups, key=sort_key):
-            rows = sorted(groups[region], key=lambda item: item.get("announced_at") or "", reverse=True)
+        for region in sorted({**{region: None for region in preferred}, **{region: None for region in groups}}, key=sort_key):
+            rows = sorted(groups.get(region, []), key=lambda item: item.get("announced_at") or "", reverse=True)
             distance = proximity(region)
             regions.append({
                 "region": region, "label": f"[{region}]", "is_preferred": region in preferred,
@@ -84,8 +101,15 @@ def group_announcements(items, preferred_regions, limit_per_region=3):
                 "items": rows[:limit_per_region],
                 "message": None if rows else "조건에 맞는 데이터가 없습니다.",
             })
-        categories.append({"category": category, "label": label, "regions": regions,
-                           "message": None if any(group["items"] for group in regions) else "조건에 맞는 데이터가 없습니다."})
+        if not preferred and not groups:
+            regions = []
+        category_label = next((item.get("label") for item in items if normalize_category(item.get("category")) == category), None) or label
+        categories.append({
+            "category": category,
+            "label": category_label,
+            "regions": regions,
+            "message": None if any(group["items"] for group in regions) else "조건에 맞는 데이터가 없습니다.",
+        })
     return {"status": "success", "preferred_regions": preferred,
             "sort_basis": "region_reference_point_distance" if preferred else "region_name",
             "distance_is_approximate": True,

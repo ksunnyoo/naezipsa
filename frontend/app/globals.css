@@ -1410,6 +1410,12 @@ select:focus-visible {
   padding: 4px 10px;
   border-radius: var(--radius-full);
 }
+.subscription-item-category.is-general,
+.subscription-item-category.is-general-priority-1,
+.subscription-item-category.is-general-priority-2 {
+  background-color: #dbeafe;
+  color: #1d4ed8;
+}
 .subscription-item-category.is-priority {
   background-color: #5498ff;
   color: #ffffff;
@@ -1425,6 +1431,14 @@ select:focus-visible {
 .subscription-item-category.is-officetel {
   background-color: #b0d721;
   color: #ffffff;
+}
+.subscription-item-category.is-urban-living,
+.subscription-item-category.is-private-rental,
+.subscription-item-category.is-living-accommodation,
+.subscription-item-category.is-public-supported-private-rental,
+.subscription-item-category.is-default {
+  background-color: #e5e7eb;
+  color: #374151;
 }
 .subscription-row-address {
   display: block;
@@ -4319,7 +4333,8 @@ select:focus-visible {
   bottom: calc(100% + 6px);
 }
 .subscription-region-option {
-  display: block;
+  display: flex;
+  align-items: center;
   width: 100%;
   text-align: left;
   border: 0;
@@ -4327,12 +4342,16 @@ select:focus-visible {
   background: transparent;
   padding: 7px 10px;
   color: #525252;
+  transition: background 0.15s ease, color 0.15s ease;
 }
 .subscription-region-option:hover,
-.subscription-region-option:focus-visible,
+.subscription-region-option:focus-visible {
+  background: #f3f4f6;
+}
 .subscription-region-option.is-active {
   color: #2563eb;
   background: #eff6ff;
+  font-weight: 600;
 }
 /* "전체 지역"은 나머지 체크박스 목록과 구분되도록 구분선을 둔다 - 클릭 한
    번으로 선택 전체를 해제하는 동작이라 목록과 성격이 다르다 */

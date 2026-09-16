@@ -9,7 +9,7 @@ from app.subscription.router import get_personalized_subscription
 
 
 def announcement(region, date="2026-09-13"):
-    return {"category": "priority-1", "region": region, "house_name": region, "announced_at": date}
+    return {"category": "general", "region": region, "house_name": region, "announced_at": date}
 
 
 def test_seoul_first_then_distance_and_labels():
@@ -26,7 +26,7 @@ def test_multiple_preferred_regions_and_empty_group():
     assert [region["region"] for region in regions] == ["서울", "부산", "경기"]
     assert regions[0]["items"] == []
     assert regions[0]["message"] == "조건에 맞는 데이터가 없습니다."
-    assert len(result["data"]) == 4
+    assert len(result["data"]) == 8
 
 
 def test_limit_is_applied_within_region_after_grouping():

@@ -15,7 +15,7 @@ def test_categories_use_receipt_dates_and_exclude_non_officetel():
         return Mock(json=lambda: {"data": rows})
     with patch("app.subscription.cheongyak_home.SERVICE_KEY", "test"), patch("app.subscription.cheongyak_home.requests.get", side_effect=response):
         items = fetch_categorized_announcements(limit=10)
-        assert [item["category"] for item in items] == ["priority-1", "no-rank", "special", "officetel"]
+        assert [item["category"] for item in items] == ["general", "special", "no-rank", "officetel", "urban-living"]
         assert items[0]["receipt_start"] == "2026-09-22"
         assert items[0]["receipt_end"] == "2026-09-23"
         assert fetch_categorized_announcements(region="부산") == []
