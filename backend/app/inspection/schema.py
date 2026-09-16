@@ -34,12 +34,20 @@ class InspectionCreate(BaseModel):
     memo: str = Field(default="", max_length=2000)
 
 
-class InspectionCreated(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+class InspectionRecord(InspectionCreate):
+    """저장된 임장 기록 1건. GET과 POST가 똑같이 이 모양으로 돌려준다.
+
+    InspectionCreate를 물려받아 18개 항목·종합 평점·메모를 그대로 갖고,
+    DB가 채우는 값 네 개를 더한다. 예전 201 응답({id, property_id,
+    created_at})을 그대로 포함하므로 그 세 값만 읽던 쪽은 영향이 없다.
+    """
+
+    model_config = ConfigDict(from_attributes=True, extra="ignore")
 
     id: int
     property_id: int
     created_at: datetime
+    updated_at: datetime
 
 
 class InspectionProperty(BaseModel):

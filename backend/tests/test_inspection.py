@@ -37,13 +37,22 @@ def inspection_env(tmp_path):
     profiles_table = Profile.__table__.to_metadata(MetaData())
     profiles_table.c.service_purposes.type = JSON()
     profiles_table.create(engine)
-    # ORM create_all 대신 실제 신규 마이그레이션으로 테이블을 생성한다.
-    spec = importlib.util.spec_from_file_location('inspection_migration', 'alembic/versions/20260913_1500_c71f9a2d830e_create_property_inspections.py')
-    migration = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(migration)
+    # ORM create_all 대신 실제 마이그레이션으로 테이블을 만든다. 테이블 생성
+    # (c71f9a2d830e) 다음에 후보당 1건·CASCADE로 바꾸는 a4f2c8e91b07까지 이어서
+    # 실행하므로, 두 마이그레이션이 실제로 이어 붙는지도 함께 검증된다.
+    migrations = []
+    for index, path in enumerate((
+        'alembic/versions/20260913_1500_c71f9a2d830e_create_property_inspections.py',
+        'alembic/versions/20260916_1530_a4f2c8e91b07_inspection_one_per_candidate.py',
+    )):
+        spec = importlib.util.spec_from_file_location(f'inspection_migration_{index}', path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        migrations.append(module)
     with engine.begin() as conn:
         with Operations.context(MigrationContext.configure(conn)):
-            migration.upgrade()
+            for module in migrations:
+                module.upgrade()
     with Session(engine) as db:
         db.add(ComplexMaster(id=100, apt_nm='테스트 아파트'))
         db.flush()
@@ -66,7 +75,8 @@ def inspection_env(tmp_path):
     app.dependency_overrides.update(previous)
     with engine.begin() as conn:
         with Operations.context(MigrationContext.configure(conn)):
-            migration.downgrade()
+            for module in reversed(migrations):
+                module.downgrade()
     engine.dispose()
 
 
@@ -81,22 +91,29 @@ def test_get_selected_candidate(inspection_env):
     assert two['list_price'] is None
 
 
-def test_persistence_null_zero_and_new_visits(inspection_env):
+def test_persistence_null_zero_and_overwrite(inspection_env):
+    """미확인(null)과 "없음"(0)을 구분해 저장하고, 다시 저장하면 고쳐 쓴다."""
     client, engine = inspection_env
     payload = {'overall_rating': 4, 'harmful_facility': 0, 'memo': '한글 메모🏠' * 250}
     first = client.post(f'{URL}/1/inspection', json=payload)
-    second = client.post(f'{URL}/1/inspection', json={'overall_rating': 1})
-    assert first.status_code == second.status_code == 201
-    assert first.json()['id'] != second.json()['id']
+    assert first.status_code == 201  # 처음 저장이면 새로 만든다
     assert first.json()['property_id'] == 1 and first.json()['created_at']
+    with Session(engine) as db:
+        row = db.scalar(select(PropertyInspection))
+        assert row.memo == payload['memo']
+        assert row.harmful_facility == 0  # 0(없음)은 미확인(null)과 다르게 남는다
+        assert all(getattr(row, f) is None for f in CHECKS - {'harmful_facility'})
+
+    second = client.post(f'{URL}/1/inspection', json={'overall_rating': 1})
+    assert second.status_code == 200  # 두 번째부터는 같은 기록을 고쳐 쓴다
+    assert first.json()['id'] == second.json()['id']
     engine.dispose()  # 연결을 닫은 뒤 새 세션에서도 COMMIT 결과를 읽는다.
     with Session(engine) as db:
-        rows = db.scalars(select(PropertyInspection).order_by(PropertyInspection.id)).all()
-        assert len(rows) == 2
-        assert rows[0].memo == payload['memo']
-        assert rows[0].harmful_facility == 0 and rows[1].harmful_facility is None
-        assert all(getattr(rows[0], f) is None for f in CHECKS - {'harmful_facility'})
-        assert rows[1].memo == ''
+        rows = db.scalars(select(PropertyInspection)).all()
+        assert len(rows) == 1  # 저장할 때마다 쌓이지 않는다
+        assert rows[0].overall_rating == 1
+        assert rows[0].memo == ''  # 보내지 않은 값은 기본값으로 돌아간다
+        assert rows[0].harmful_facility is None
 
 
 def test_all_18_fields(inspection_env):
@@ -136,7 +153,36 @@ def test_login_required(inspection_env):
     client, _ = inspection_env
     del app.dependency_overrides[get_current_profile]
     assert client.get(f'{URL}/1').status_code == 401
+    assert client.get(f'{URL}/1/inspection').status_code == 401
     assert client.post(f'{URL}/1/inspection', json={'overall_rating': 3}).status_code == 401
+
+
+def test_get_saved_inspection(inspection_env):
+    """저장한 값을 그대로 다시 불러온다. 기록이 없으면 404로 "빈 체크리스트"를 뜻한다."""
+    client, _ = inspection_env
+    assert client.get(f'{URL}/1/inspection').status_code == 404  # 저장 전
+    client.post(f'{URL}/1/inspection', json={
+        'overall_rating': 5, 'transport': 3, 'harmful_facility': 0, 'memo': '채광 좋음',
+    })
+    body = client.get(f'{URL}/1/inspection').json()
+    assert body['overall_rating'] == 5 and body['transport'] == 3
+    assert body['harmful_facility'] == 0 and body['memo'] == '채광 좋음'
+    assert body['school'] is None  # 고르지 않은 항목은 미확인 그대로
+    assert body['property_id'] == 1 and body['created_at'] and body['updated_at']
+    assert client.get(f'{URL}/2/inspection').status_code == 404  # 기록 없는 내 후보
+    assert client.get(f'{URL}/3/inspection').status_code == 404  # 남의 후보
+
+
+def test_one_record_per_candidate_in_db(inspection_env):
+    """후보당 1건은 DB 제약으로도 막는다(같은 후보로 두 번 INSERT 불가)."""
+    _, engine = inspection_env
+    with Session(engine) as db:
+        db.execute(insert(PropertyInspection).values(property_id=1, overall_rating=3))
+        db.commit()
+        with pytest.raises(IntegrityError):
+            db.execute(insert(PropertyInspection).values(property_id=1, overall_rating=4))
+            db.commit()
+        db.rollback()
 
 
 def test_commit_failure_rolls_back(inspection_env, monkeypatch):
@@ -151,18 +197,16 @@ def test_commit_failure_rolls_back(inspection_env, monkeypatch):
     assert client.post(f'{URL}/1/inspection', json={'overall_rating': 3}).status_code == 201
 
 
-def test_preserve_history_on_candidate_delete(inspection_env):
+def test_candidate_delete_removes_inspection(inspection_env):
+    """기록이 있어도 후보를 지울 수 있고, 기록도 함께 지워진다(2026-09-16 결정)."""
     client, engine = inspection_env
     client.post(f'{URL}/1/inspection', json={'overall_rating': 3})
-    assert client.delete('/api/v1/dashboard/items/1').status_code == 409
+    assert client.delete('/api/v1/dashboard/items/1').status_code == 200
     assert client.delete('/api/v1/dashboard/items/2').status_code == 200
-    assert client.delete('/api/v1/dashboard/items/3').status_code == 404
+    assert client.delete('/api/v1/dashboard/items/3').status_code == 404  # 남의 후보
     with Session(engine) as db:
-        with pytest.raises(IntegrityError):
-            db.delete(db.get(DashboardItem, 1))
-            db.commit()
-        db.rollback()
-        assert db.scalar(select(func.count()).select_from(PropertyInspection)) == 1
+        assert db.get(DashboardItem, 1) is None
+        assert db.scalar(select(func.count()).select_from(PropertyInspection)) == 0
 
 
 @pytest.mark.parametrize('data', [{'transport': 0}, {'harmful_facility': 2}, {'overall_rating': 6}, {'memo': '가' * 2001}, {'property_id': 999}])

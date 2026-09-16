@@ -220,6 +220,36 @@ export async function deleteDashboardItem(itemId) {
   return res.json();
 }
 
+// 임장 체크리스트 조회. propertyId는 후보의 서버 id(backendId)다.
+// 아직 저장한 적이 없으면 서버가 404를 주는데 이건 오류가 아니라 "빈
+// 체크리스트로 시작"이라는 뜻이므로 null로 돌려준다. 남의 후보·없는 후보도
+// 같은 404라 화면에서는 구분하지 않는다.
+export async function getInspection(propertyId) {
+  const res = await fetch(`${API_BASE_URL}/properties/${propertyId}/inspection`, {
+    headers: await authHeaders(),
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) {
+    throw new Error(`get inspection failed with status ${res.status}`);
+  }
+  return res.json();
+}
+
+// 임장 체크리스트 저장. 후보당 기록이 1건이라 처음 저장은 201, 다시 저장하면
+// 기존 기록을 고쳐 쓰고 200이다(둘 다 성공). body는 18개 항목(숫자 또는 null)과
+// overall_rating(1~5 정수, 필수), memo다 - 정의되지 않은 키를 넣으면 422다.
+export async function saveInspection(propertyId, payload) {
+  const res = await fetch(`${API_BASE_URL}/properties/${propertyId}/inspection`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...(await authHeaders()) },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    throw new Error(`save inspection failed with status ${res.status}`);
+  }
+  return res.json();
+}
+
 // 정렬 저장(Phase 3 보완): 내 전체 후보의 표시 순서를 한 번에 저장한다.
 // expectedItemIds는 드래그를 시작하기 전에 마지막으로 서버에서 확인한 순서다 - 다른 탭·기기에서
 // 목록이 바뀌었으면 서버가 저장하지 않고 409를 준다. userId로 요청 시점의 로그인 계정을

@@ -30,7 +30,6 @@ from sqlalchemy.orm import Session
 from app.core.deps import get_current_profile
 from app.core.database import get_db
 from app.dashboard.model import MAX_DASHBOARD_ITEMS, DashboardItem, DashboardShare
-from app.inspection.model import PropertyInspection
 from app.dashboard.service import (
     ITEM_ORDER,
     enrich_snapshot_items,
@@ -311,16 +310,13 @@ def delete_item(
     """A-08: 후보 삭제. 남의 후보 id를 찍어 보내도 404가 나고 지워지지 않는다.
 
     삭제로 생긴 빈 순번은 그대로 둔다(남은 후보의 상대 순서는 유지된다).
+
+    임장 기록이 있어도 막지 않는다(2026-09-16 결정). 외래키 CASCADE로 기록도
+    함께 지워진다 - 예전에는 409로 막았는데, 후보를 "제외" 상태로 바꾸는
+    화면이 없어서 사용자가 그 후보를 영영 지울 수 없었다.
     """
     _lock_owner(db, profile.id)
     item = _get_owned_item(db, profile.id, item_id, lock=True)
-    if db.scalar(select(PropertyInspection.id).where(
-        PropertyInspection.property_id == item.id
-    ).limit(1)) is not None:
-        raise HTTPException(
-            status_code=409,
-            detail="임장 기록이 있는 후보 매물은 삭제할 수 없습니다. 제외 상태로 변경해 주세요.",
-        )
     db.delete(item)
     db.commit()
     return ItemDeletedResponse(deleted_id=item_id)

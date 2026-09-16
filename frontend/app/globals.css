@@ -4389,3 +4389,28 @@ select:focus-visible {
   outline: 2px solid #5498ff;
   outline-offset: 2px;
 }
+
+/* 체크리스트 종합 평점 - 자동 계산값과 안내 문구.
+   항목 목록(.checklist-group) 아래에 붙는 마지막 블록이라 위쪽 구분선을 준다. */
+.checklist-rating {
+  border-top: 1px solid var(--line, #e5e7eb);
+  padding-top: 14px;
+  margin-top: 4px;
+}
+.checklist-rating .field-block-label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.checklist-rating-auto {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--main, #2f6df6);
+}
+.checklist-rating-hint {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #6b7280;
+}

@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.dashboard.model import DashboardItem
 from app.inspection.model import PropertyInspection
-from app.inspection.schema import InspectionCreate, InspectionCreated, InspectionProperty
+from app.inspection.schema import InspectionCreate, InspectionProperty, InspectionRecord
 from app.property.model import ComplexMaster, SizeMaster
 
 
@@ -28,9 +28,34 @@ def get_property(db: Session, user_id, property_id: int) -> InspectionProperty:
     )
 
 
+def get_inspection(db: Session, user_id, property_id: int) -> InspectionRecord:
+    """저장해둔 임장 기록 1건을 돌려준다.
+
+    없는 후보·남의 후보·아직 기록이 없는 후보 모두 404다. 화면은 셋 다
+    "빈 체크리스트로 시작"으로 똑같이 처리하면 되고, 남의 후보인지 기록이
+    없는 것뿐인지를 구분해 알려주지 않는다.
+    """
+    owned_id = db.scalar(
+        select(DashboardItem.id)
+        .where(DashboardItem.id == property_id, DashboardItem.user_id == user_id)
+    )
+    if owned_id is None:
+        raise HTTPException(404, "해당 후보 매물을 찾을 수 없습니다.")
+    record = db.scalar(
+        select(PropertyInspection).where(PropertyInspection.property_id == owned_id)
+    )
+    if record is None:
+        raise HTTPException(404, "아직 저장된 임장 기록이 없습니다.")
+    return InspectionRecord.model_validate(record)
+
+
 def save_inspection(db: Session, user_id, property_id: int, payload: InspectionCreate):
+    """후보당 1건을 저장한다. 처음이면 새로 만들고, 이미 있으면 고쳐 쓴다.
+
+    (기록, 새로 만들었는지) 를 돌려준다 - 라우터가 201과 200을 가른다.
+    """
     try:
-        # 후보 삭제와 저장이 경합해도 소유권 확인부터 INSERT까지 일관되게 처리한다.
+        # 후보 삭제와 저장이 경합해도 소유권 확인부터 저장까지 일관되게 처리한다.
         item = db.execute(
             select(DashboardItem)
             .where(DashboardItem.id == property_id, DashboardItem.user_id == user_id)
@@ -38,12 +63,22 @@ def save_inspection(db: Session, user_id, property_id: int, payload: InspectionC
         ).scalar_one_or_none()
         if item is None:
             raise HTTPException(404, "해당 후보 매물을 찾을 수 없습니다.")
-        record = PropertyInspection(property_id=item.id, **payload.model_dump())
-        db.add(record)
+        record = db.scalar(
+            select(PropertyInspection).where(PropertyInspection.property_id == item.id)
+        )
+        created = record is None
+        if created:
+            record = PropertyInspection(property_id=item.id, **payload.model_dump())
+            db.add(record)
+        else:
+            # 보내지 않은 항목은 미확인(null)으로 돌아간다. 화면이 늘 18개
+            # 전체를 보내는 구조라 부분 수정이 아니라 통째로 덮어쓰는 게 맞다.
+            for field, value in payload.model_dump().items():
+                setattr(record, field, value)
         db.flush()
-        result = InspectionCreated.model_validate(record)
+        result = InspectionRecord.model_validate(record)
         db.commit()
-        return result
+        return result, created
     except Exception:
         db.rollback()
         raise

@@ -31,12 +31,15 @@ import {
   createGroupShareLink,
   revokeGroupShareLinks,
   getSharedGroup,
+  getInspection,
+  saveInspection,
 } from "@/lib/api";
 import {
   toCreateItemPayload,
   toDetailsPayload,
   fromBackendItem,
 } from "@/lib/dashboardItems";
+import { fromInspectionRecord, toInspectionPayload } from "@/lib/checklist";
 
 // 새 그룹 기본 이름: "새 그룹", 이미 있으면 "새 그룹 2", "새 그룹 3" ...
 // 이름을 먼저 묻지 않고 만든 뒤 그룹 메뉴에서 바로 고친다.
@@ -46,6 +49,15 @@ function nextGroupName(groups) {
   let n = 2;
   while (names.has(`새 그룹 ${n}`)) n += 1;
   return `새 그룹 ${n}`;
+}
+
+// 체크리스트 캐시 키. 로그인 후보는 서버 id로 잡는다 - 목록을 다시 불러오면
+// 화면용 id("item-1")가 순번대로 다시 매겨지기 때문에, 그 사이 후보를 지운 적이
+// 있으면 다른 매물의 체크리스트가 붙을 수 있다. 게스트 후보는 서버 id가 없어
+// 화면용 id를 쓰되, 두 종류가 섞이지 않게 접두어를 붙인다.
+function checklistKey(item) {
+  if (!item) return null;
+  return item.backendId != null ? `srv-${item.backendId}` : `loc-${item.id}`;
 }
 
 // 목록을 주어진 id 순서로 줄 세운다(key: 로컬 id "id" 또는 서버 id "backendId").
@@ -73,13 +85,13 @@ export default function NaejipsaApp() {
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [profileEditorUserId, setProfileEditorUserId] = useState(null);
   const [editingItemId, setEditingItemId] = useState(null);
-  // itemChecklists: 매물 수정 팝업의 체크리스트 작성 결과를 매물 id별로
-  // 들고 있는 임시 캐시. 백엔드 저장 API가 아직 없어서 새로고침하면
-  // 사라지지만, 팝업을 닫았다 같은 매물로 다시 열어도(저장을 눌렀다면)
-  // 값이 유지되도록 EditListingDialog가 아니라 여기(NaejipsaApp)에서
-  // 들고 있는다 - EditListingDialog는 열릴 때마다 언마운트되지 않지만
-  // showChecklist/checklist state를 매번 초기화하므로, 그 초기화 값의
-  // 출처를 여기 캐시로 바꿔주는 구조.
+  // itemChecklists: 후보별 임장 체크리스트. checklistKey(item) -> {values, rating, memo}
+  // 이고, 아직 서버에서 받아오지 않았으면 키 자체가 없다(불러왔는데 기록이
+  // 없으면 null이 들어간다 - 그래야 팝업을 다시 열 때 또 부르지 않는다).
+  //
+  // 2026-09-16부터 로그인 사용자는 서버에 저장하므로 새로고침해도 남는다.
+  // 여기서 들고 있는 이유는 팝업을 열 때마다 다시 부르지 않기 위해서다.
+  // 게스트는 서버에 저장할 수 없어 이 세션 동안만 유지된다.
   const [itemChecklists, setItemChecklists] = useState({});
   // activeContentTab: 헤더의 "상세 데이터"/"인사이트" 메뉴 - Workspace가 이
   // 값을 받아 .content-track(오른쪽 차트 영역)을 좌우로 슬라이드한다.
@@ -649,6 +661,15 @@ export default function NaejipsaApp() {
       }
       serverOrderRef.current = serverOrderRef.current.filter((id) => id !== item.backendId);
     }
+    // 후보를 지우면 임장 기록도 서버에서 함께 지워진다(외래키 CASCADE). 캐시도 비운다.
+    const removedKey = checklistKey(item);
+    if (removedKey) {
+      setItemChecklists((prev) => {
+        const next = { ...prev };
+        delete next[removedKey];
+        return next;
+      });
+    }
     setDashboardItems((items) => items.filter((it) => it.id !== id));
   }
   function handleReorder(nextItems) {
@@ -707,11 +728,34 @@ export default function NaejipsaApp() {
       toast.show("순서를 저장하지 못했어요. 이전 순서로 되돌렸어요.");
     }
   }
-  function handleEdit(id) {
+  // 저장해둔 체크리스트를 먼저 받아온 뒤에 팝업을 연다.
+  //
+  // 순서가 중요하다 - 팝업을 먼저 열면 EditListingDialog가 그 시점의 빈 값으로
+  // 화면을 초기화해버리고, 뒤늦게 도착한 값은 반영되지 않는다(초기화는 팝업이
+  // 열리는 순간 한 번만 한다). 한 번 받아온 후보는 다시 부르지 않으므로
+  // 기다림은 후보당 처음 한 번뿐이고, 불러오기에 실패해도 팝업은 열어서
+  // 빈 체크리스트로 작성할 수 있게 둔다.
+  async function handleEdit(id) {
+    const item = dashboardItems.find((it) => it.id === id);
+    const key = checklistKey(item);
+    if (user && item?.backendId && key && itemChecklists[key] === undefined) {
+      try {
+        const record = await getInspection(item.backendId);
+        if (currentUserIdRef.current !== user.id) return;
+        setItemChecklists((prev) => ({ ...prev, [key]: fromInspectionRecord(record) }));
+      } catch {
+        toast.show("저장한 체크리스트를 불러오지 못했어요.");
+      }
+    }
     setEditingItemId(id);
   }
-  async function handleEditSave(id, data) {
+
+  // 매물 정보와 체크리스트를 저장 버튼 하나로 함께 저장한다. 매물 정보가
+  // 실패하면 체크리스트는 보내지 않고 팝업을 열어둔 채 끝낸다 - 입력값이
+  // 남아 있어 그대로 다시 시도할 수 있다.
+  async function handleEditSave(id, data, checklist, rating) {
     const item = dashboardItems.find((it) => it.id === id);
+    const key = checklistKey(item);
     if (user && item?.backendId) {
       try {
         await updateDashboardItemDetails(
@@ -722,18 +766,31 @@ export default function NaejipsaApp() {
         toast.show("변경사항을 저장하지 못했어요. 잠시 후 다시 시도해주세요.");
         return;
       }
+      // 종합 평점이 없으면 아직 아무 항목도 체크하지 않은 것이라 보낼 게 없다.
+      if (rating != null) {
+        try {
+          const saved = await saveInspection(
+            item.backendId,
+            // 모바일 임장 페이지에서 쓴 메모가 있으면 지우지 않고 그대로 돌려보낸다.
+            toInspectionPayload(checklist, rating, itemChecklists[key]?.memo ?? ""),
+          );
+          setItemChecklists((prev) => ({ ...prev, [key]: fromInspectionRecord(saved) }));
+        } catch {
+          toast.show("체크리스트를 저장하지 못했어요. 잠시 후 다시 시도해주세요.");
+          return;
+        }
+      }
+    } else if (key) {
+      // 게스트는 서버에 저장할 수 없어 이 세션 동안만 값을 들고 있는다.
+      setItemChecklists((prev) => ({
+        ...prev,
+        [key]: { values: checklist, rating, memo: "" },
+      }));
     }
     setDashboardItems((items) =>
       items.map((it) => (it.id === id ? { ...it, ...data } : it)),
     );
     setEditingItemId(null);
-  }
-  // 체크리스트는 아직 백엔드에 저장하지 않는다(진수 확인: 일단 임시
-  // 유지만) - 저장 버튼을 눌렀을 때만 이 세션 동안의 캐시에 반영해서,
-  // 같은 매물을 다시 열었을 때 이어서 볼 수 있게만 해준다. 취소를
-  // 누르면(이 함수가 호출되지 않으면) 작성 중이던 내용은 버려진다.
-  function handleChecklistSave(id, checklist) {
-    setItemChecklists((prev) => ({ ...prev, [id]: checklist }));
   }
 
   async function handleAddSubmit(itemData) {
@@ -887,11 +944,10 @@ export default function NaejipsaApp() {
       <EditListingDialog
         open={editingItemId != null}
         item={editingItem}
-        initialChecklist={
-          editingItemId != null ? itemChecklists[editingItemId] : undefined
-        }
+        initialChecklist={itemChecklists[checklistKey(editingItem)]?.values}
+        initialRating={itemChecklists[checklistKey(editingItem)]?.rating ?? null}
+        servicePurposes={profile?.service_purposes}
         onSave={handleEditSave}
-        onChecklistSave={handleChecklistSave}
         onCancel={() => setEditingItemId(null)}
       />
       <ImportShareModal

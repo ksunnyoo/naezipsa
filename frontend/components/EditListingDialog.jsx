@@ -5,7 +5,15 @@ import ChipGroup from "./ChipGroup";
 import InspectionChecklist from "./InspectionChecklist";
 import { CloseIcon } from "./icons";
 import { DIRECTIONS, INTERIORS } from "@/lib/data";
-import { EMPTY_CHECKLIST } from "@/lib/checklist";
+import {
+  EMPTY_CHECKLIST,
+  computeOverallScore,
+  weightsForPurposes,
+} from "@/lib/checklist";
+
+// 종합 평점 선택지(1~5). ChipGroup은 같은 값을 다시 누르면 null을 주는데,
+// 여기선 그게 "직접 고른 값을 지우고 자동 계산으로 되돌린다"는 뜻이 된다.
+const RATING_OPTIONS = [1, 2, 3, 4, 5].map((value) => ({ value, label: String(value) }));
 
 // <EditListingDialog /> : 대시보드 카드의 연필 아이콘으로 여는 화면 중앙
 // 팝업. #modal-overlay(InterestModal, 오른쪽 슬라이드 패널)와는 완전히
@@ -21,19 +29,23 @@ import { EMPTY_CHECKLIST } from "@/lib/checklist";
 // 슬라이드되듯 전환된다 - 별도의 "이전" 버튼 없이 같은 버튼을 다시
 // 누르면 폼 화면으로 돌아간다.
 //
-// 체크리스트는 아직 저장 API가 없다(진수 확인: 일단 임시 유지만). 그래서
-// 이 컴포넌트 자신은 여전히 매번 EMPTY_CHECKLIST로 리셋되지만, 상위
-// (NaejipsaApp)가 매물 id별로 들고 있는 세션 캐시를 initialChecklist로
-// 내려주면 그 값으로 채운다 - 저장을 누르면(handleSave) onChecklistSave로
-// 그 캐시에 반영되고, 취소를 누르면 반영되지 않아 버려진다. 새로고침하면
-// 캐시 자체가 사라지므로 진짜 "저장"은 아니고, 같은 세션 안에서 팝업을
-// 다시 열었을 때만 이어서 보이는 정도다.
+// 2026-09-16부터 체크리스트도 서버에 저장한다. 값을 불러오고 보내는 일은
+// 상위(NaejipsaApp)가 맡고, 이 컴포넌트는 initialChecklist/initialRating으로
+// 받은 값을 보여주다가 저장할 때 onSave로 함께 올려보낸다.
+//
+// 종합 평점: 저장 API가 1~5 정수를 필수로 받는데 체크리스트에는 입력칸이
+// 없었다. 그래서 체크한 항목으로 점수를 계산해 미리 골라두고, 사용자가 다르게
+// 느끼면 직접 고를 수 있게 한다. 직접 고른 값(ratingOverride)이 있으면 그게
+// 이기고, 같은 값을 다시 누르면 자동 계산으로 돌아간다.
+//
+// 가중치는 프로필의 이용 목적(전세/매매)에 따라 달라진다 - servicePurposes.
 export default function EditListingDialog({
   open,
   item,
   initialChecklist,
+  initialRating,
+  servicePurposes,
   onSave,
-  onChecklistSave,
   onCancel,
 }) {
   const [price, setPrice] = useState("");
@@ -44,12 +56,19 @@ export default function EditListingDialog({
   const [interior, setInterior] = useState(null);
   const [showChecklist, setShowChecklist] = useState(false);
   const [checklist, setChecklist] = useState(EMPTY_CHECKLIST);
+  // null이면 "자동 계산을 쓴다", 숫자면 "사용자가 직접 고른 값".
+  const [ratingOverride, setRatingOverride] = useState(null);
+  const [saving, setSaving] = useState(false);
   const priceInputRef = useRef(null);
+  const weights = weightsForPurposes(servicePurposes);
 
   // 열릴 때(open이 true가 되는 시점)마다 해당 item의 현재 값으로 필드를
   // 채운다. InterestModal과 동일한 이유로 useEffect+setState 대신 "렌더링
   // 중 state 조정" 패턴을 쓴다(react-hooks/set-state-in-effect 회피).
-  const [prevOpen, setPrevOpen] = useState(open);
+  // false로 시작한다(open으로 시작하지 않는다) - 실제 앱에서는 닫힌 채 떠 있다가
+  // 열리지만, 처음부터 열린 상태로 마운트되면 아래 초기화가 한 번도 돌지 않아
+  // 저장해둔 값이 빈 화면으로 보이기 때문이다.
+  const [prevOpen, setPrevOpen] = useState(false);
   if (open !== prevOpen) {
     setPrevOpen(open);
     if (open && item) {
@@ -59,9 +78,18 @@ export default function EditListingDialog({
       setHo(item.ho || "");
       setDirection(item.direction || null);
       setInterior(item.interior || null);
-      // 이 세션에서 저장해둔 값이 있으면 그걸로, 없으면 빈 체크리스트로.
+      // 저장해둔 값이 있으면 그걸로, 없으면 빈 체크리스트로.
       setShowChecklist(false);
-      setChecklist(initialChecklist || EMPTY_CHECKLIST);
+      const loaded = initialChecklist || EMPTY_CHECKLIST;
+      setChecklist(loaded);
+      // 저장된 평점이 자동 계산값과 같으면 "자동"으로 두어 항목을 고칠 때마다
+      // 따라 움직이게 하고, 다르면 사용자가 직접 고른 값으로 보고 지킨다.
+      const autoOnLoad = computeOverallScore(loaded, weights);
+      setRatingOverride(
+        initialRating != null && initialRating !== autoOnLoad?.rating
+          ? initialRating
+          : null,
+      );
     }
   }
 
@@ -71,15 +99,30 @@ export default function EditListingDialog({
     return () => cancelAnimationFrame(raf);
   }, [open]);
 
-  function handleSave() {
-    if (!item) return;
-    onSave(item.id, { price, floor, dong, ho, direction, interior });
-    onChecklistSave?.(item.id, checklist);
+  // 매물 정보와 체크리스트를 저장 버튼 하나로 함께 올려보낸다. 저장이 끝날
+  // 때까지 버튼을 잠그고, 실패하면 상위가 팝업을 닫지 않아 입력값이 남는다.
+  async function handleSave() {
+    if (!item || saving) return;
+    setSaving(true);
+    try {
+      await onSave(
+        item.id,
+        { price, floor, dong, ho, direction, interior },
+        checklist,
+        rating,
+      );
+    } finally {
+      setSaving(false);
+    }
   }
 
   function updateChecklistField(key, value) {
     setChecklist((prev) => ({ ...prev, [key]: value }));
   }
+
+  // 체크한 항목으로 계산한 점수(없으면 null)와, 실제로 저장할 평점.
+  const auto = computeOverallScore(checklist, weights);
+  const rating = ratingOverride ?? auto?.rating ?? null;
 
   return (
     <div className={"edit-overlay" + (open ? " is-open" : "")} inert={!open} onClick={(e) => {
@@ -178,7 +221,28 @@ export default function EditListingDialog({
               </div>
             </>
           ) : (
-            <InspectionChecklist values={checklist} onChange={updateChecklistField} />
+            <>
+              <InspectionChecklist values={checklist} onChange={updateChecklistField} />
+              <div className="field-block checklist-rating">
+                <div className="field-block-label">
+                  종합 평점
+                  {auto && (
+                    <span className="checklist-rating-auto">자동 계산 {auto.score}점</span>
+                  )}
+                </div>
+                <ChipGroup
+                  name="overall_rating"
+                  options={RATING_OPTIONS}
+                  value={rating}
+                  onChange={setRatingOverride}
+                />
+                <p className="checklist-rating-hint">
+                  {auto
+                    ? "체크한 항목으로 계산했어요. 다르게 느끼면 직접 골라주세요."
+                    : "항목을 체크하면 종합 평점이 자동으로 계산돼요."}
+                </p>
+              </div>
+            </>
           )}
         </div>
 
@@ -186,8 +250,14 @@ export default function EditListingDialog({
           <button type="button" className="edit-dialog-cancel" tabIndex={0} onClick={onCancel}>
             취소
           </button>
-          <button type="button" className="edit-dialog-save" tabIndex={0} onClick={handleSave}>
-            저장
+          <button
+            type="button"
+            className="edit-dialog-save"
+            tabIndex={0}
+            disabled={saving}
+            onClick={handleSave}
+          >
+            {saving ? "저장 중…" : "저장"}
           </button>
         </div>
       </div>
