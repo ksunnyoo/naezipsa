@@ -145,12 +145,27 @@ def create_group(db: Session, user_id, name: str, item_ids: list[int]) -> Group:
     return group
 
 
-def rename_group(db: Session, user_id, group_id: int, name: str) -> Group:
+# "안 보냄"과 "null 보냄"을 가르는 표식. null은 "그룹 가중치를 지운다"는 뜻이라
+# 둘을 같게 다루면 이름만 고쳐도 가중치가 지워진다.
+UNSET = object()
+
+
+def update_group(db: Session, user_id, group_id: int, name: str | None = None,
+                 scoring_weights=UNSET) -> Group:
+    """그룹의 이름·점수 가중치를 바꾼다. 넘긴 것만 바꾼다."""
     group = _owned_group(db, user_id, group_id)
-    group.name = name
+    if name is not None:
+        group.name = name
+    if scoring_weights is not UNSET:
+        group.scoring_weights = scoring_weights
     db.commit()
     db.refresh(group)
     return group
+
+
+def rename_group(db: Session, user_id, group_id: int, name: str) -> Group:
+    """이름만 바꾼다(기존 호출부 유지용)."""
+    return update_group(db, user_id, group_id, name=name)
 
 
 def delete_group(db: Session, user_id, group_id: int) -> None:

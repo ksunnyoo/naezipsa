@@ -4,20 +4,34 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { getInsightItems, sourceLink } from "@/lib/insightApi";
 import { ChevronDownIcon } from "../icons";
 
+// 분류 목록은 백엔드 응답에서 읽는다. 응답이 유형별로 나뉘어 오고 각 그룹이
+// 자기 `category`와 한글 `label`을 같이 주기 때문에(app/subscription/regions.py의
+// CATEGORIES, README "그룹 응답 구조" 참고), 프론트가 목록을 따로 들고 있을
+// 이유가 없다.
+//
+// 예전에는 여기에 4가지를 하드코딩해서, 백엔드에 분류가 늘어도 필터에 나타나지
+// 않고 항목의 칩도 사라졌다. 이제 새 분류가 생기면 프론트를 고치지 않아도
+// 자동으로 필터와 칩에 나타난다(2026-09-16).
+//
+// 색깔만 알려진 분류에 맞춰 둔다. 모르는 분류는 기본 색(is-other)을 쓴다.
+// (병합 메모: 원래 feat 브랜치는 "priority-1" 키를 썼는데, 백엔드
+// normalize_category가 응답을 내려줄 때 이미 "general"로 정규화해서 보내서
+// 실제로는 한 번도 안 걸리는 키였다 - "general"로 맞춰서 일반공급 칩도 제 색이
+// 나오게 고쳤다.)
+const CATEGORY_CLASS = {
+  general: "is-general",
+  "no-rank": "is-no-rank",
+  special: "is-special",
+  officetel: "is-officetel",
+};
+const DEFAULT_CATEGORY_CLASS = "is-other";
+// "일반공급"은 청약홈에서 1순위/2순위로 나뉘어 접수하지만 백엔드는 이 둘을
+// 구분하지 않고 "general" 하나로 묶어 보낸다 - 필터에서만 두 옵션으로 쪼개서
+// 보여준다(둘 중 하나를 고르면 실제로는 general 항목이 전부 나온다).
 const GENERAL_CATEGORY_OPTIONS = [
   { key: "general-1", label: "일반-1순위", className: "is-general-priority-1", displayLabel: "1순위" },
   { key: "general-2", label: "일반-2순위", className: "is-general-priority-2", displayLabel: "2순위" },
 ];
-const CATEGORY_CLASS_MAP = {
-  general: "is-general",
-  special: "is-special",
-  "no-rank": "is-no-rank",
-  officetel: "is-officetel",
-  "urban-living": "is-urban-living",
-  "private-rental": "is-private-rental",
-  "living-accommodation": "is-living-accommodation",
-  "public-supported-private-rental": "is-public-supported-private-rental",
-};
 const STATUS_LABELS = { closed: "마감", open: "접수 중", upcoming: "접수 예정" };
 // 분류/지역 선택 팝업이 아래로 펼쳐질 공간이 부족하면(.subscription-region-options의
 // CSS max-height 240px + 트리거와의 간격 6px) 그만큼 뷰포트 아래쪽 여유가 없다는
@@ -46,21 +60,29 @@ export default function SubscriptionInfoCard({ refreshKey = "", referenceSizeId 
   const [regionDropUp, setRegionDropUp] = useState(false);
   const regionPicker = useRef(null);
   const regionNames = ["서울", "경기", "인천", "강원", "충북", "충남", "세종", "대전", "전북", "전남", "광주", "경북", "대구", "경남", "울산", "부산", "제주"];
-  const categoryOptions = useMemo(() => {
-    if (!Array.isArray(state.groups)) return [];
-    const baseOptions = state.groups
-      .map(group => ({ key: group.category, label: group.label || "미분류", className: CATEGORY_CLASS_MAP[group.category] || "is-default" }))
-      .filter(category => category.key && category.label);
-    const hasGeneral = baseOptions.some(category => category.key === "general");
-    const generalOptions = hasGeneral ? GENERAL_CATEGORY_OPTIONS.map(option => ({ ...option, key: option.key, label: option.label, className: option.className })) : [];
-    return [...generalOptions, ...baseOptions.filter(category => category.key !== "general")];
-  }, [state.groups]);
+  // 지금 응답에 들어 있는 분류만 고를 수 있다. 골라 둔 분류가 다음 응답에서
+  // 사라지면(그 유형 공고가 없는 날) 그 선택은 무시한다 - 그대로 두면 목록이
+  // 비어 보이는데 화면에는 왜 비었는지 드러나지 않는다.
+  const categories = state.groups
+    .filter(group => group.category)
+    .map(group => ({
+      key: group.category,
+      label: group.label || group.category,
+      className: CATEGORY_CLASS[group.category] || DEFAULT_CATEGORY_CLASS,
+    }));
+  // "일반공급"이 이번 응답에 있으면 필터 옵션에서는 그 자리를 1순위/2순위
+  // 두 옵션으로 바꿔치기한다(위 GENERAL_CATEGORY_OPTIONS 주석 참고).
+  const hasGeneral = categories.some(category => category.key === "general");
+  const categoryOptions = hasGeneral
+    ? [...GENERAL_CATEGORY_OPTIONS, ...categories.filter(category => category.key !== "general")]
+    : categories;
   const categoryMap = Object.fromEntries(categoryOptions.map(category => [category.key, category]));
-  const categoryLabel = selectedCategories.length === 0
+  const activeCategories = selectedCategories.filter(key => key in categoryMap);
+  const categoryLabel = activeCategories.length === 0
     ? "분류선택"
-    : selectedCategories.length === 1
-      ? categoryMap[selectedCategories[0]]?.label || categoryMap[selectedCategories[0]]?.displayLabel || "분류"
-      : `${categoryMap[selectedCategories[0]]?.label || categoryMap[selectedCategories[0]]?.displayLabel || "분류"} 외 ${selectedCategories.length - 1}개`;
+    : activeCategories.length === 1
+      ? categoryMap[activeCategories[0]]?.label || categoryMap[activeCategories[0]]?.displayLabel || "분류"
+      : `${categoryMap[activeCategories[0]]?.label || categoryMap[activeCategories[0]]?.displayLabel || "분류"} 외 ${activeCategories.length - 1}개`;
   const regionLabel = selectedRegions.length === 0
     ? "지역선택"
     : selectedRegions.length === 1
@@ -81,7 +103,9 @@ export default function SubscriptionInfoCard({ refreshKey = "", referenceSizeId 
   useEffect(() => {
     const controller = new AbortController();
     async function load() {
-      setState({ groups: [], loading: true, error: "" });
+      // 다시 불러오는 동안 이전 그룹을 지우지 않는다 - 지우면 분류 목록이 잠깐
+      // 비어서, 마감제외를 켜고 끄는 사이에 분류 선택 팝업이 빈 채로 보인다.
+      setState(previous => ({ ...previous, loading: true, error: "" }));
       if (!referenceSizeId) {
         setState({ groups: [], loading: false, error: "기준 매물의 지역 정보를 확인할 수 없습니다.", retryable: false });
         return;
@@ -111,8 +135,8 @@ export default function SubscriptionInfoCard({ refreshKey = "", referenceSizeId 
     .flatMap(group => group.regions.flatMap(region => region.items))
     .filter(item => !excludeClosed || ["upcoming", "open"].includes(item.receipt_status))
     .filter(item => {
-      if (selectedCategories.length === 0) return true;
-      return selectedCategories.some(category => {
+      if (activeCategories.length === 0) return true;
+      return activeCategories.some(category => {
         if (category === "general-1" || category === "general-2") return item.category === "general";
         return item.category === category;
       });
@@ -133,19 +157,22 @@ export default function SubscriptionInfoCard({ refreshKey = "", referenceSizeId 
               <span className={`subscription-region-chevron ${categoryOpen ? "is-open" : ""}`} aria-hidden="true"><ChevronDownIcon /></span>
             </button>
             {categoryOpen && <div id="subscription-category-options" className={"subscription-region-options" + (categoryDropUp ? " is-drop-up" : "")} role="group" aria-label="청약 분류 선택">
-              <button type="button" className={`subscription-region-option ${selectedCategories.length === 0 ? "is-active" : ""}`} onClick={() => setSelectedCategories([])}>전체 분류</button>
+              <button type="button" className={`subscription-region-option subscription-region-option--all ${activeCategories.length === 0 ? "is-active" : ""}`} onClick={() => setSelectedCategories([])}>전체 분류</button>
               {categoryOptions.map(option => {
                 const checked = selectedCategories.includes(option.key);
-                const toggleCategory = () => setSelectedCategories(prev => (checked ? prev.filter(value => value !== option.key) : [...prev, option.key]));
                 return (
-                  <button
-                    key={`${option.key}-${option.label}`}
-                    type="button"
-                    className={`subscription-region-option ${checked ? "is-active" : ""}`}
-                    onClick={toggleCategory}
-                  >
+                  <label key={option.key} className={`subscription-region-option subscription-region-checkbox ${checked ? "is-active" : ""}`}>
+                    <input
+                      type="checkbox"
+                      className="subscription-checkbox-input"
+                      checked={checked}
+                      onChange={() => setSelectedCategories(prev => (checked ? prev.filter(value => value !== option.key) : [...prev, option.key]))}
+                    />
+                    <span className={"subscription-checkbox-box" + (checked ? " is-checked" : "")}>
+                      {checked && <img className="subscription-checkbox-icon" src="/check-icon.png" alt="" />}
+                    </span>
                     <span>{option.label}</span>
-                  </button>
+                  </label>
                 );
               })}
             </div>}
@@ -185,17 +212,17 @@ export default function SubscriptionInfoCard({ refreshKey = "", referenceSizeId 
           : state.error ? <p className="news-message">현재 정보를 확인할 수 없습니다.</p>
             : items.length === 0 ? <p className="news-message">조건에 맞는 데이터가 없습니다.</p>
               : items.map(item => {
-                const category = item.category === "general" && selectedCategories.length === 1 && (selectedCategories[0] === "general-1" || selectedCategories[0] === "general-2")
-                  ? {
-                    key: selectedCategories[0],
-                    label: selectedCategories[0] === "general-1" ? "1순위" : "2순위",
-                    className: selectedCategories[0] === "general-1" ? "is-general-priority-1" : "is-general-priority-2",
-                  }
-                  : categoryMap[item.category] || {
-                    key: item.category,
-                    label: item.label || item.category || "기타",
-                    className: CATEGORY_CLASS_MAP[item.category] || "is-default",
-                  };
+                // "일반-1순위/2순위" 필터로 보고 있으면 그 라벨을 칩에도 보여준다
+                // (실제로는 general 항목 전부가 나온다 - 백엔드가 순위를 안 나눠서
+                // 구분해서 보여줄 수 없다).
+                // 응답의 분류 목록에 없는 값이라도 칩을 지우지 않는다. 예전에는
+                // 모르는 분류면 칩이 통째로 사라져서, 백엔드에 분류가 늘었을 때
+                // 화면에서는 아무 표시도 나지 않았다.
+                const activeGeneralFilter = activeCategories.length === 1 ? GENERAL_CATEGORY_OPTIONS.find(option => option.key === activeCategories[0]) : null;
+                const category = item.category === "general" && activeGeneralFilter
+                  ? { key: activeGeneralFilter.key, label: activeGeneralFilter.displayLabel, className: activeGeneralFilter.className }
+                  : categoryMap[item.category]
+                    || (item.category ? { label: item.category, className: DEFAULT_CATEGORY_CLASS } : null);
                 return (
                   <a key={`${item.announcement_no}-${item.category}`} href={sourceLink(item.source_url)} target="_blank" rel="noopener noreferrer" className="subscription-row">
                     <div className="subscription-row-top">

@@ -4408,3 +4408,114 @@ select:focus-visible {
   outline: 2px solid #5498ff;
   outline-offset: 2px;
 }
+
+/* 체크리스트 종합 평점 - 자동 계산값과 안내 문구.
+   항목 목록(.checklist-group) 아래에 붙는 마지막 블록이라 위쪽 구분선을 준다. */
+.checklist-rating {
+  border-top: 1px solid var(--line, #e5e7eb);
+  padding-top: 14px;
+  margin-top: 4px;
+}
+.checklist-rating .field-block-label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.checklist-rating-auto {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--main, #2f6df6);
+}
+.checklist-rating-hint {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #6b7280;
+}
+
+/* 후보 카드의 임장 점수 뱃지. 체크리스트를 쓴 후보에만 보인다. */
+.interest-card-score {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--main, #2f6df6);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  vertical-align: middle;
+}
+
+/* 그룹 메뉴의 "점수" 버튼과 펼쳐지는 가중치 편집 영역. */
+.group-row-scoring {
+  flex: none;
+  padding: 2px 8px;
+  border: 1px solid var(--line, #e5e7eb);
+  border-radius: 999px;
+  background: transparent;
+  font-size: 12px;
+  color: #4b5563;
+  cursor: pointer;
+}
+.group-row-scoring[aria-expanded="true"] {
+  border-color: var(--main, #2f6df6);
+  color: var(--main, #2f6df6);
+  font-weight: 600;
+}
+.group-scoring {
+  padding: 10px 12px 12px;
+  border-top: 1px dashed var(--line, #e5e7eb);
+}
+.group-scoring-hint {
+  margin: 0 0 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #6b7280;
+}
+.group-scoring-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 3px 0;
+  font-size: 13px;
+}
+.group-scoring-row input {
+  width: 64px;
+  padding: 3px 6px;
+  border: 1px solid var(--line, #e5e7eb);
+  border-radius: 6px;
+  font-size: 13px;
+  text-align: right;
+}
+.group-scoring-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+}
+.group-scoring-actions button {
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--line, #e5e7eb);
+  background: #fff;
+  font-size: 12px;
+  cursor: pointer;
+}
+.group-scoring-actions button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.group-scoring-save {
+  border-color: var(--main, #2f6df6) !important;
+  background: var(--main, #2f6df6) !important;
+  color: #fff;
+  font-weight: 600;
+}
+
+/* 응답에 새로 생긴 분류(프론트가 색을 모르는 유형)의 기본 칩 색. 색을 모른다고
+   칩을 숨기면 화면에서 분류가 통째로 사라지므로 기본 색으로라도 보여준다. */
+.subscription-item-category.is-other {
+  background-color: #94a3b8;
+  color: #ffffff;
+}

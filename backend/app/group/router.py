@@ -32,7 +32,7 @@ from app.group.schema import (
     GroupDetailResponse,
     GroupItemsAddRequest,
     GroupListResponse,
-    GroupRenameRequest,
+    GroupUpdateRequest,
     GroupShareLinkCreatedResponse,
     GroupShareLinksRevokedResponse,
     GroupSummary,
@@ -63,6 +63,7 @@ def _detail(db: Session, profile: Profile, group: Group) -> GroupDetailResponse:
         created_at=group.created_at,
         updated_at=group.updated_at,
         share_link_count=service.active_share_link_count(db, group.id),
+        scoring_weights=group.scoring_weights,
         item_ids=item_ids,
         items=items,
     )
@@ -78,7 +79,7 @@ def list_groups(
         GroupSummary(
             id=group.id, name=group.name, item_count=count,
             created_at=group.created_at, updated_at=group.updated_at,
-            share_link_count=share_count,
+            share_link_count=share_count, scoring_weights=group.scoring_weights,
         )
         for group, count, share_count in rows
     ]
@@ -117,14 +118,24 @@ def get_group(
 
 
 @router.patch("/{group_id}", response_model=GroupDetailResponse)
-def rename_group(
+def update_group(
     group_id: int,
-    payload: GroupRenameRequest,
+    payload: GroupUpdateRequest,
     profile: Profile = Depends(get_current_profile),
     db: Session = Depends(get_db),
 ):
+    """이름·점수 가중치를 바꾼다. 보낸 필드만 바뀐다.
+
+    `scoring_weights`에 null을 보내면 그룹 가중치를 지워 프로필 기본으로 되돌린다.
+    아예 안 보내면 지금 값을 그대로 둔다.
+    """
+    weights = service.UNSET
+    if "scoring_weights" in payload.model_fields_set:
+        weights = payload.scoring_weights.model_dump() if payload.scoring_weights else None
     try:
-        group = service.rename_group(db, profile.id, group_id, payload.name)
+        group = service.update_group(
+            db, profile.id, group_id, name=payload.name, scoring_weights=weights,
+        )
     except service.GroupNotFound:
         raise _not_found(_GROUP_NOT_FOUND)
     return _detail(db, profile, group)
