@@ -31,13 +31,17 @@ export default function Header({
 }) {
   return (
     <div className="header" data-component="Header">
+      {/* 로그인하면 홈(히어로)으로 돌아갈 이유가 없다 - 히어로는 매물을 처음 담게
+          하는 안내라서 이미 담은 사용자에게는 의미가 없고, 대시보드가 본 화면이다.
+          로고 자체는 브랜드 표시라 감추지 않고 누를 수만 없게 한다(2026-09-17 결정). */}
       <button
         type="button"
         id="logo-home-btn"
         className="logo-group"
         tabIndex={0}
         data-component="Logo"
-        aria-label="홈으로"
+        aria-label={user ? "내집사" : "홈으로"}
+        disabled={Boolean(user)}
         onClick={onLogoClick}
       >
         <img className="logo-mark" src="/logo-mark.png" alt="" />
