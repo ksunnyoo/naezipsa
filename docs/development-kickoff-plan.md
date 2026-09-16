@@ -1160,3 +1160,17 @@ ALTER TABLE groups ADD COLUMN scoring_weights JSON;
 **결정:** 두 변경이 [SubscriptionInfoCard.jsx](../frontend/components/Insight/SubscriptionInfoCard.jsx)에서 충돌하므로(실제 병합 시도로 확인), **이 브랜치의 청약 변경을 main 상태로 되돌린다.** 그 파일을 더 이상 건드리지 않으면 #22가 머지된 뒤 이 브랜치는 충돌 없이 올라간다. 함께 넣었던 `is-other` 칩 색과 우리 구현을 검증하던 테스트도 뺐다 - #22는 `is-default`를 쓰므로 그 테스트는 헛된 실패가 된다.
 
 **남는 것:** 커밋 `8588b0a`의 청약 부분은 역할이 끝났다. 되돌린 내용 중 #22에 없는 개선(다시 불러오는 동안 이전 그룹 유지, 사라진 선택 무시)이 필요하면 #22 머지 후 별도로 올린다.
+
+## 청약 분류 선택 정리를 렌더 시점으로 (2026-09-16)
+
+PR #22와 #23이 모두 main에 들어간 뒤(`4b532c9`) 합쳐진 상태를 검증하다가 **lint 오류 1개**를 발견했다. 테스트·빌드는 통과하지만 이 저장소는 그동안 lint 오류 0개를 유지해왔다.
+
+- 위치: [SubscriptionInfoCard.jsx](../frontend/components/Insight/SubscriptionInfoCard.jsx), 규칙 `set-state-in-effect`.
+- 내용: "골라둔 분류가 응답에서 사라지면 선택을 지운다"를 `useEffect` 안에서 `setSelectedCategories`로 처리했다. 무한 루프 가드가 있어 동작은 하지만, 응답이 올 때마다 렌더가 한 번 더 돈다.
+
+**고친 방법:** 선택 상태를 지우지 않고, 그릴 때 유효한 분류만 걸러 쓴다(`activeCategories`). 효과는 둘이다.
+
+- 응답이 올 때마다 도는 추가 렌더가 없어진다.
+- 사용자의 선택 자체는 남아 있어, 그 분류가 다음 응답에 다시 나타나면 고르지 않아도 되살아난다.
+
+회귀 테스트 2개를 함께 넣었다(분류를 고르면 그 분류만 남는지, 골라둔 분류가 사라져도 목록이 빈 채 멈추지 않는지). 프론트 **125 passed**, `eslint` **오류 0개**, `next build` 성공.
