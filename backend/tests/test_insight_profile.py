@@ -65,7 +65,8 @@ def _item(item_id):
 @pytest.fixture
 def insight_context(monkeypatch):
     profile = SimpleNamespace(
-        id=uuid4(), service_purposes=None, age_group="30s", nickname="private-nickname"
+        id=uuid4(), service_purposes=None, age_group="30s", nickname="private-nickname",
+        scoring_weights=None,
     )
     db = Mock(name="db")  # 트랜잭션 종료(commit)만 받는 가짜 세션
     get_items = Mock(return_value=[_item(11), _item(13)])
@@ -77,6 +78,9 @@ def insight_context(monkeypatch):
         ],
     })
     monkeypatch.setattr(service, "get_items_with_metrics", get_items)
+    # 임장 기록 조회도 실제 DB를 읽으므로 함께 대체한다(이 파일의 관심사는 프로필 반영이다).
+    # 임장 문장 자체는 tests/test_scoring.py에서 따로 확인한다.
+    monkeypatch.setattr(service, "_load_inspections", lambda db, item_ids: {})
     monkeypatch.setattr(llm, "ask_json", ask)
     monkeypatch.setattr(llm, "is_configured", lambda: True)
 
@@ -183,6 +187,8 @@ def test_age_and_nickname_are_never_read_by_insight(insight_context):
     class PurposeOnlyProfile:
         id = insight_context.profile.id
         service_purposes = ["buy"]
+        # 임장 점수를 낼 때 쓰는 기준. 나이·닉네임과 달리 AI가 읽어도 되는 값이다.
+        scoring_weights = None
 
         @property
         def age_group(self):

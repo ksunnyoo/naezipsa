@@ -14,7 +14,11 @@ import re
 
 from sqlalchemy.orm import Session
 
+from sqlalchemy import select
+
+from app.core.scoring import CATEGORY_ITEMS, compute_score, weights_for
 from app.dashboard.service import get_items_with_metrics
+from app.inspection.model import PropertyInspection
 from app.insight import llm
 from app.insight.schema import InsightResponse, ItemInsight
 
@@ -75,7 +79,51 @@ def _strip_id_mentions(text: str) -> str:
     return _ID_PAREN_RE.sub("", text or "").strip()
 
 
-def _describe(item) -> str:
+# 1~3 점수를 사람이 읽는 말로. 유해시설(0/1)만 따로 쓴다.
+_LEVEL_WORDS = {3: "좋음", 2: "보통", 1: "나쁨"}
+_INSPECTION_KEYS = tuple(key for keys in CATEGORY_ITEMS.values() for key in keys)
+
+
+def _load_inspections(db: Session, item_ids: list[int]) -> dict:
+    """후보별 임장 기록(후보당 1건). 내 후보 id만 넘어오므로 소유권은 이미 걸러져 있다."""
+    if not item_ids:
+        return {}
+    rows = db.scalars(
+        select(PropertyInspection).where(PropertyInspection.property_id.in_(item_ids))
+    ).all()
+    return {row.property_id: row for row in rows}
+
+
+def _inspection_text(record, weights) -> str | None:
+    """임장 기록을 LLM이 읽을 한 조각으로. 기록이 없거나 체크한 항목이 없으면 None.
+
+    점수만 주면 신호가 약해서 사용자가 실제로 확인한 항목도 함께 넘긴다. 다만 항목의
+    한글 라벨(수압, 채광...)은 화면에만 있고 여기 복제하면 이름이 갈라지므로, DB
+    컬럼 이름을 그대로 쓰고 값만 좋음/보통/나쁨으로 옮긴다.
+    """
+    if record is None:
+        return None
+    values = {key: getattr(record, key, None) for key in _INSPECTION_KEYS}
+    checked = [(key, value) for key, value in values.items() if value is not None]
+    if not checked:
+        return None
+
+    parts = []
+    score = compute_score(values, weights)
+    if score is not None:
+        parts.append(f"임장 점수 {score}점(100점 만점, 사용자가 직접 확인한 항목 기준)")
+    graded = [
+        f"유해시설 {'있음' if value else '없음'}" if key == "harmful_facility"
+        else f"{key} {_LEVEL_WORDS.get(value, value)}"
+        for key, value in checked
+    ]
+    parts.append("직접 확인: " + ", ".join(graded))
+    if record.memo:
+        parts.append(f"임장 메모: {record.memo}")
+    return " / ".join(parts)
+
+
+def _describe(item, inspection: str | None = None) -> str:
     """후보 한 건을 LLM이 읽을 한 줄로 만든다.
 
     JSON을 그대로 던지지 않고 사람이 읽는 문장으로 바꾸는 이유:
@@ -113,6 +161,9 @@ def _describe(item) -> str:
         if m.last_trade_date:
             parts.append(f"최종거래 {m.last_trade_date}")
 
+    if inspection:
+        parts.append(inspection)
+
     return " / ".join(parts)
 
 
@@ -122,6 +173,7 @@ def build_insight(
     item_ids: list[int] | None,
     *,
     service_purposes: list[str] | None = None,
+    scoring_weights: dict | None = None,
 ) -> InsightResponse:
     """내 후보들을 분석해 요약과 항목별 강점·약점을 만든다.
 
@@ -129,18 +181,23 @@ def build_insight(
     애초에 목록에 없으므로 걸러진다(소유권 검사가 자동으로 따라온다).
     """
     items = get_items_with_metrics(db, user_id)
+    if item_ids:
+        wanted = set(item_ids)
+        items = [i for i in items if i.id in wanted]
+    # 임장 기록도 같은 트랜잭션에서 미리 읽어둔다(아래 commit 전에).
+    inspections = _load_inspections(db, [i.id for i in items])
     # 필요한 DB 읽기는 여기서 끝난다. 아래 LLM 호출은 최대 30초가 걸리므로, 트랜잭션을
     # 열어둔 채 기다리면 그동안 DB 연결을 쥐고 있게 된다(연결 풀이 작아 다른 요청이 막힌다).
     # 결과는 ORM 객체가 아니라 Pydantic 모델이라 트랜잭션을 끝내도 그대로 쓸 수 있다.
     db.commit()
-    if item_ids:
-        wanted = set(item_ids)
-        items = [i for i in items if i.id in wanted]
 
     if not items:
         raise ValueError("분석할 후보가 없습니다. 먼저 관심 매물을 담아 주세요.")
 
-    lines = "\n".join(_describe(i) for i in items)
+    weights = weights_for(scoring_weights, service_purposes)
+    lines = "\n".join(
+        _describe(i, _inspection_text(inspections.get(i.id), weights)) for i in items
+    )
     user_prompt = (
         f"아래는 사용자가 담아둔 후보 매물 {len(items)}건입니다.\n\n"
         f"{lines}\n\n"
