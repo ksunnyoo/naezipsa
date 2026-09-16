@@ -2,6 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import { DocumentIcon, PencilIcon, PlusIcon, ShareIcon, XIcon } from "../icons";
+import { WEIGHT_CATEGORIES, editableWeights } from "@/lib/checklist";
+
+// 가중치 합. 전부 0이면 점수를 낼 수 없어 저장 버튼을 잠근다(서버도 422로 막는다).
+function scoringTotal(weights) {
+  return WEIGHT_CATEGORIES.reduce((sum, { key }) => sum + (Number(weights[key]) || 0), 0);
+}
 
 // <GroupBar /> : 헤더 "그룹" 버튼을 누르면 그 아래 말풍선 모양으로 펼쳐지는 그룹 메뉴.
 // 그룹에 관한 동작은 모두 여기서 한다(목록 위에 따로 버튼 줄이나 이름 입력 모달을 두지 않는다).
@@ -20,6 +26,10 @@ export default function GroupBar({ menu }) {
   const [editingId, setEditingId] = useState(null);
   const [draft, setDraft] = useState("");
   const [creating, setCreating] = useState(false);
+  // 점수 기준(가중치)을 펼쳐 놓은 그룹과 편집 중인 값. 그룹마다 따로 저장한다.
+  const [scoringId, setScoringId] = useState(null);
+  const [weights, setWeights] = useState({});
+  const [savingWeights, setSavingWeights] = useState(false);
   const inputRef = useRef(null);
   // 이번 이름 편집이 이미 저장·취소됐으면 뒤따르는 blur에서 다시 저장하지 않는다.
   const editDoneRef = useRef(false);
@@ -61,6 +71,21 @@ export default function GroupBar({ menu }) {
     }
     // 저장에 실패하면 입력을 그대로 두고 다시 시도할 수 있게 한다.
     editDoneRef.current = false;
+  }
+
+  // 점수 기준 펼치기 - 이 그룹에 정해둔 값이 있으면 그걸로, 없으면 프로필
+  // 이용 목적(전세/매매)에서 온 기본값을 시작점으로 보여준다.
+  function openScoring(group) {
+    setScoringId(group.id);
+    setWeights(editableWeights(group, menu.profile));
+  }
+
+  async function saveWeights(group, next) {
+    if (savingWeights) return;
+    setSavingWeights(true);
+    const saved = await menu.onUpdateScoring(group.id, next);
+    setSavingWeights(false);
+    if (saved) setScoringId(null);
   }
 
   async function createGroup() {
@@ -133,6 +158,21 @@ export default function GroupBar({ menu }) {
                       <ShareIcon />
                     </button>
                   )}
+                  {!editing && (
+                    <button
+                      type="button"
+                      tabIndex={0}
+                      className="group-row-scoring"
+                      title="이 그룹의 점수 기준"
+                      aria-expanded={scoringId === group.id}
+                      aria-label={`"${group.name}" 그룹 점수 기준`}
+                      onClick={() =>
+                        scoringId === group.id ? setScoringId(null) : openScoring(group)
+                      }
+                    >
+                      점수
+                    </button>
+                  )}
                   <button
                     type="button"
                     tabIndex={0}
@@ -165,6 +205,56 @@ export default function GroupBar({ menu }) {
                     <XIcon />
                   </button>
                 </div>
+                {scoringId === group.id && (
+                  <div className="group-scoring">
+                    <p className="group-scoring-hint">
+                      이 그룹의 후보만 아래 비중으로 점수를 매겨요. 합이 100일 필요는
+                      없어요 — 비율만 씁니다.
+                    </p>
+                    {WEIGHT_CATEGORIES.map(({ key, label }) => (
+                      <label key={key} className="group-scoring-row">
+                        <span>{label}</span>
+                        <input
+                          type="number"
+                          min={0}
+                          max={100}
+                          value={weights[key] ?? 0}
+                          disabled={savingWeights}
+                          onChange={(e) =>
+                            setWeights((prev) => ({
+                              ...prev,
+                              [key]: Math.max(0, Math.min(100, Number(e.target.value) || 0)),
+                            }))
+                          }
+                        />
+                      </label>
+                    ))}
+                    <div className="group-scoring-actions">
+                      <button
+                        type="button"
+                        className="group-scoring-save"
+                        disabled={savingWeights || scoringTotal(weights) === 0}
+                        title={
+                          scoringTotal(weights) === 0
+                            ? "하나 이상은 0보다 크게 정해주세요"
+                            : undefined
+                        }
+                        onClick={() => saveWeights(group, weights)}
+                      >
+                        저장
+                      </button>
+                      <button
+                        type="button"
+                        className="group-scoring-reset"
+                        disabled={savingWeights}
+                        title="이 그룹만의 기준을 지우고 프로필 기본(전세/매매)으로 되돌려요"
+                        onClick={() => saveWeights(group, null)}
+                      >
+                        기본값으로
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })

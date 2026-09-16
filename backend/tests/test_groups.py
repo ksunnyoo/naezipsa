@@ -269,3 +269,72 @@ def test_snapshot_group_routes_that_replaced_candidates_are_removed(env):
     assert env.client.post("/api/v1/dashboard/groups", json={"name": "옛 그룹"}).status_code == 404
     assert env.client.post("/api/v1/dashboard/groups/1/load").status_code == 404
     assert _candidates(env) == before
+
+
+# --- 그룹별 임장 점수 가중치 (2026-09-16) -----------------------------------
+#
+# 점수 산출 규칙은 그룹 단위로만 다르게 둔다. 같은 그룹 안의 후보를 모두 같은 자로
+# 재야 비교가 공정하기 때문이다. 체크하는 항목 18개는 모든 그룹이 공통이다.
+
+WEIGHTS = {
+    "transport_group": 30,
+    "education_life_group": 20,
+    "complex_group": 25,
+    "interior_condition_group": 15,
+    "facility_group": 10,
+}
+
+
+def _new_group(env, name="비교 그룹"):
+    return env.client.post(GROUPS, json={"name": name}).json()
+
+
+def test_new_group_has_no_scoring_weights(env):
+    """새 그룹은 가중치를 정하지 않은 상태다(화면이 프로필 기본으로 점수를 낸다)."""
+    assert _new_group(env)["scoring_weights"] is None
+    assert env.client.get(GROUPS).json()["groups"][0]["scoring_weights"] is None
+
+
+def test_save_and_clear_scoring_weights(env):
+    group_id = _new_group(env)["id"]
+
+    saved = env.client.patch(f"{GROUPS}/{group_id}", json={"scoring_weights": WEIGHTS})
+    assert saved.status_code == 200
+    assert saved.json()["scoring_weights"] == WEIGHTS
+    # 목록 응답에도 실려야 카드 점수를 낼 때 그룹마다 다시 부르지 않는다.
+    assert env.client.get(GROUPS).json()["groups"][0]["scoring_weights"] == WEIGHTS
+
+    cleared = env.client.patch(f"{GROUPS}/{group_id}", json={"scoring_weights": None})
+    assert cleared.status_code == 200
+    assert cleared.json()["scoring_weights"] is None  # 프로필 기본으로 되돌린다
+
+
+def test_rename_keeps_scoring_weights(env):
+    """이름만 바꿀 때 가중치가 지워지면 안 된다 - 보낸 필드만 바꾼다."""
+    group_id = _new_group(env)["id"]
+    env.client.patch(f"{GROUPS}/{group_id}", json={"scoring_weights": WEIGHTS})
+
+    renamed = env.client.patch(f"{GROUPS}/{group_id}", json={"name": "이름만 변경"})
+    assert renamed.json()["name"] == "이름만 변경"
+    assert renamed.json()["scoring_weights"] == WEIGHTS
+
+
+@pytest.mark.parametrize("weights", [
+    {**WEIGHTS, "unknown_group": 10},                 # 정의되지 않은 카테고리
+    {key: WEIGHTS[key] for key in list(WEIGHTS)[:4]},  # 카테고리 누락
+    {**WEIGHTS, "transport_group": 101},               # 범위 밖
+    {**WEIGHTS, "transport_group": -1},
+    dict.fromkeys(WEIGHTS, 0),                         # 전부 0이면 점수를 낼 수 없다
+])
+def test_invalid_scoring_weights_change_nothing(env, weights):
+    group_id = _new_group(env)["id"]
+    response = env.client.patch(f"{GROUPS}/{group_id}", json={"scoring_weights": weights})
+    assert response.status_code == 422
+    assert env.client.get(f"{GROUPS}/{group_id}").json()["scoring_weights"] is None
+
+
+def test_empty_patch_and_other_user_group(env):
+    group_id = _new_group(env)["id"]
+    # 바꿀 내용을 하나도 안 보내면 거절한다(실수로 빈 PATCH를 보내는 걸 막는다).
+    assert env.client.patch(f"{GROUPS}/{group_id}", json={}).status_code == 422
+    assert env.client.patch(f"{GROUPS}/999", json={"scoring_weights": WEIGHTS}).status_code == 404

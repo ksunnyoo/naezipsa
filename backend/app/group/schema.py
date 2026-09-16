@@ -1,7 +1,9 @@
 """[A] group · schema — 그룹 API 요청·응답 모양 (Phase 4, 공유 링크 Phase 5)."""
 from datetime import datetime
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
+
+from app.core.scoring import ScoringWeights
 
 from app.dashboard.model import MAX_DASHBOARD_ITEMS
 from app.dashboard.schema import (
@@ -48,13 +50,29 @@ class GroupCreateRequest(BaseModel):
         return _unique_ids(value)
 
 
-class GroupRenameRequest(BaseModel):
-    name: str = Field(min_length=1, max_length=MAX_GROUP_NAME_LENGTH)
+
+
+class GroupUpdateRequest(BaseModel):
+    """그룹 수정. 보낸 필드만 바꾼다(이름만, 가중치만, 둘 다 가능).
+
+    `scoring_weights`에 null을 명시적으로 보내면 "이 그룹은 따로 정하지 않음"으로
+    되돌린다(프로필 기본 가중치를 쓰게 된다). 안 보내는 것과 null을 보내는 것은
+    model_fields_set으로 구분한다 - 프로필 수정(app/user/schema.py)과 같은 방식이다.
+    """
+
+    name: str | None = Field(default=None, min_length=1, max_length=MAX_GROUP_NAME_LENGTH)
+    scoring_weights: ScoringWeights | None = None
 
     @field_validator("name")
     @classmethod
-    def strip_name(cls, value: str) -> str:
-        return _clean_name(value)
+    def strip_name(cls, value: str | None) -> str | None:
+        return value if value is None else _clean_name(value)
+
+    @model_validator(mode="after")
+    def require_one_field(self):
+        if not self.model_fields_set:
+            raise ValueError("바꿀 내용을 하나 이상 보내 주세요.")
+        return self
 
 
 class GroupItemsAddRequest(BaseModel):
@@ -76,6 +94,9 @@ class GroupSummary(BaseModel):
     updated_at: datetime
     # 지금 살아 있는(공유를 중지하지 않은) 공유 링크 수. 0이면 공유하고 있지 않다.
     share_link_count: int = 0
+    # 이 그룹의 임장 점수 가중치. null이면 따로 정하지 않은 것이라 화면이 프로필
+    # 이용 목적(전세/매매)의 기본 가중치로 점수를 낸다.
+    scoring_weights: ScoringWeights | None = None
 
 
 class GroupListResponse(BaseModel):

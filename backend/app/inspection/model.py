@@ -1,5 +1,15 @@
-"""후보 매물별 임장 기록. 삭제 연쇄 없이 과거 기록을 보존한다."""
-from sqlalchemy import BigInteger, CheckConstraint, Column, DateTime, ForeignKey, Index, Integer, Text, func
+"""후보 매물별 임장 기록. 후보당 1건만 두고 고쳐 쓴다.
+
+2026-09-16 사용자 결정으로 두 가지가 바뀌었다(마이그레이션 a4f2c8e91b07).
+
+- 저장할 때마다 새 기록을 쌓지 않는다. property_id에 UNIQUE를 걸어 후보당
+  1건만 두고, 다시 저장하면 그 행을 고쳐 쓴다. 화면에 방문 이력을 보여줄
+  자리가 없어 이력을 남겨도 쓰이지 않기 때문이다.
+- 후보를 지우면 임장 기록도 함께 지워진다(CASCADE). 예전에는 RESTRICT라
+  기록이 있는 후보를 지울 수 없었는데, 후보를 "제외" 상태로 바꾸는 화면이
+  없어 사용자가 빠져나갈 길이 없었다.
+"""
+from sqlalchemy import BigInteger, CheckConstraint, Column, DateTime, ForeignKey, Integer, Text, UniqueConstraint, func
 
 from app.core.database import Base
 
@@ -27,11 +37,12 @@ class PropertyInspection(Base):
         CheckConstraint("floor_noise IN (1, 2, 3)", name="ck_inspections_floor_noise"),
         CheckConstraint("overall_rating BETWEEN 1 AND 5", name="ck_inspections_rating"),
         CheckConstraint("length(memo) <= 2000", name="ck_inspections_memo"),
-        Index("ix_inspections_property_created", "property_id", "created_at"),
+        # 후보당 1건. 같은 후보로 두 번 저장하면 INSERT가 아니라 UPDATE가 된다.
+        UniqueConstraint("property_id", name="uq_inspections_property"),
     )
 
     id = Column(BigInteger().with_variant(Integer, "sqlite"), primary_key=True, autoincrement=True)
-    property_id = Column(BigInteger, ForeignKey("dashboard_items.id", name="fk_inspections_property", ondelete="RESTRICT"), nullable=False)
+    property_id = Column(BigInteger, ForeignKey("dashboard_items.id", name="fk_inspections_property", ondelete="CASCADE"), nullable=False)
     transport = Column(Integer, nullable=True)
     commute_road = Column(Integer, nullable=True)
     school = Column(Integer, nullable=True)
@@ -53,3 +64,5 @@ class PropertyInspection(Base):
     overall_rating = Column(Integer, nullable=False)
     memo = Column(Text, nullable=False, server_default="")
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    # 고쳐 쓰는 구조라 "처음 쓴 시각"과 "마지막으로 고친 시각"이 둘 다 필요하다.
+    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())

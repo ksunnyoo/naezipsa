@@ -34,12 +34,33 @@ class InspectionCreate(BaseModel):
     memo: str = Field(default="", max_length=2000)
 
 
-class InspectionCreated(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+class InspectionRecord(InspectionCreate):
+    """저장된 임장 기록 1건. GET과 POST가 똑같이 이 모양으로 돌려준다.
+
+    InspectionCreate를 물려받아 18개 항목·종합 평점·메모를 그대로 갖고,
+    DB가 채우는 값 네 개를 더한다. 예전 201 응답({id, property_id,
+    created_at})을 그대로 포함하므로 그 세 값만 읽던 쪽은 영향이 없다.
+    """
+
+    model_config = ConfigDict(from_attributes=True, extra="ignore")
 
     id: int
     property_id: int
     created_at: datetime
+    updated_at: datetime
+
+
+class InspectionListResponse(BaseModel):
+    """내 후보의 임장 기록 전체. 후보 카드에 점수를 띄우려면 목록 단계에서
+    모든 후보의 항목 점수가 필요해서 한 번에 준다(후보마다 한 번씩 부르면 느리다).
+
+    후보 목록 응답(DashboardItemWithMetrics)에 섞지 않는 이유: 그 모양은 그룹
+    상세와 공유 링크 응답에도 함께 쓰여서, 거기에 임장 값을 넣으면 로그인 없이
+    보는 공유 링크로 임장 기록이 새어 나간다.
+    """
+
+    items: list[InspectionRecord]
+    count: int
 
 
 class InspectionProperty(BaseModel):

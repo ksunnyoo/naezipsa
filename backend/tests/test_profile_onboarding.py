@@ -111,8 +111,11 @@ def test_first_profile_has_null_purposes_for_onboarding(profile_api):
     assert is_random_nickname(body["nickname"])
     assert body["age_group"] is None
     assert set(body) == {
-        "user_id", "nickname", "age_group", "service_purposes", "created_at", "updated_at",
+        "user_id", "nickname", "age_group", "service_purposes", "scoring_weights",
+        "created_at", "updated_at",
     }
+    # 임장 점수 기준도 처음에는 정하지 않은 상태다(이용 목적 기반 기본값을 쓴다).
+    assert body["scoring_weights"] is None
     assert profile_api.rows[user_id]["service_purposes"] is None
 
 
@@ -267,3 +270,62 @@ def test_existing_profile_without_nickname_gets_a_random_nickname_once(profile_a
 
     assert is_random_nickname(filled)
     assert profile_api.client.get(PROFILE_URL, headers=headers).json()["nickname"] == filled
+
+
+# --- 내 기본 임장 점수 기준 (2026-09-16) ------------------------------------
+#
+# 체크리스트의 "?"에서 바로 고칠 수 있어야 하는데, 전체 후보 화면에는 보고 있는
+# 그룹이 없어 저장할 곳이 없었다. 그래서 프로필에 "내 기본 기준"을 둔다.
+# 그룹이 자기 기준을 정해두면 그 그룹에서는 그룹 기준이 이긴다.
+
+WEIGHTS = {
+    "transport_group": 30,
+    "education_life_group": 20,
+    "complex_group": 25,
+    "interior_condition_group": 15,
+    "facility_group": 10,
+}
+
+
+def test_save_and_clear_my_scoring_weights(profile_api):
+    user_id = uuid.uuid4()
+    headers = profile_api.headers(user_id)
+
+    saved = profile_api.client.patch(PROFILE_URL, headers=headers, json={"scoring_weights": WEIGHTS})
+    assert saved.status_code == 200
+    assert saved.json()["scoring_weights"] == WEIGHTS
+
+    # 다음 요청에서도 그대로 읽힌다.
+    assert profile_api.client.get(PROFILE_URL, headers=headers).json()["scoring_weights"] == WEIGHTS
+
+    cleared = profile_api.client.patch(PROFILE_URL, headers=headers, json={"scoring_weights": None})
+    assert cleared.status_code == 200
+    assert cleared.json()["scoring_weights"] is None
+
+
+def test_other_fields_do_not_erase_scoring_weights(profile_api):
+    """닉네임만 바꿀 때 기준이 지워지면 안 된다 - 보낸 필드만 바꾼다."""
+    user_id = uuid.uuid4()
+    headers = profile_api.headers(user_id)
+    profile_api.client.patch(PROFILE_URL, headers=headers, json={"scoring_weights": WEIGHTS})
+
+    renamed = profile_api.client.patch(PROFILE_URL, headers=headers, json={"nickname": "내집사"})
+    assert renamed.json()["nickname"] == "내집사"
+    assert renamed.json()["scoring_weights"] == WEIGHTS
+
+
+@pytest.mark.parametrize("weights", [
+    {**WEIGHTS, "unknown_group": 10},                  # 정의되지 않은 카테고리
+    {key: WEIGHTS[key] for key in list(WEIGHTS)[:4]},   # 카테고리 누락
+    {**WEIGHTS, "transport_group": 101},                # 범위 밖
+    {**WEIGHTS, "transport_group": -1},
+    dict.fromkeys(WEIGHTS, 0),                          # 전부 0이면 점수를 낼 수 없다
+])
+def test_invalid_scoring_weights_change_nothing(profile_api, weights):
+    user_id = uuid.uuid4()
+    headers = profile_api.headers(user_id)
+
+    assert profile_api.client.patch(
+        PROFILE_URL, headers=headers, json={"scoring_weights": weights}
+    ).status_code == 422
+    assert profile_api.client.get(PROFILE_URL, headers=headers).json()["scoring_weights"] is None
