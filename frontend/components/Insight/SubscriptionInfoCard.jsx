@@ -56,11 +56,19 @@ export default function SubscriptionInfoCard({ refreshKey = "", referenceSizeId 
     return [...generalOptions, ...baseOptions.filter(category => category.key !== "general")];
   }, [state.groups]);
   const categoryMap = Object.fromEntries(categoryOptions.map(category => [category.key, category]));
-  const categoryLabel = selectedCategories.length === 0
+  // 골라둔 분류가 이번 응답에 없으면(그 유형 공고가 없는 날) 그 선택은 무시한다.
+  // 상태를 effect에서 지우지 않고 그릴 때 걸러 쓰는 이유:
+  //   - effect 안에서 setState를 하면 응답이 올 때마다 렌더가 한 번 더 돈다.
+  //   - 선택 자체는 남아 있어, 그 분류가 다음 응답에 다시 나타나면 되살아난다.
+  const activeCategories = selectedCategories.filter(key => key in categoryMap);
+  const firstCategoryLabel = categoryMap[activeCategories[0]]?.label
+    || categoryMap[activeCategories[0]]?.displayLabel
+    || "분류";
+  const categoryLabel = activeCategories.length === 0
     ? "분류선택"
-    : selectedCategories.length === 1
-      ? categoryMap[selectedCategories[0]]?.label || categoryMap[selectedCategories[0]]?.displayLabel || "분류"
-      : `${categoryMap[selectedCategories[0]]?.label || categoryMap[selectedCategories[0]]?.displayLabel || "분류"} 외 ${selectedCategories.length - 1}개`;
+    : activeCategories.length === 1
+      ? firstCategoryLabel
+      : `${firstCategoryLabel} 외 ${activeCategories.length - 1}개`;
   const regionLabel = selectedRegions.length === 0
     ? "지역선택"
     : selectedRegions.length === 1
@@ -81,7 +89,9 @@ export default function SubscriptionInfoCard({ refreshKey = "", referenceSizeId 
   useEffect(() => {
     const controller = new AbortController();
     async function load() {
-      setState({ groups: [], loading: true, error: "" });
+      // 다시 불러오는 동안 이전 그룹을 지우지 않는다 - 지우면 분류 목록이 잠깐
+      // 비어서, 마감제외를 켜고 끄는 사이에 분류 선택 팝업이 빈 채로 보인다.
+      setState(previous => ({ ...previous, loading: true, error: "" }));
       if (!referenceSizeId) {
         setState({ groups: [], loading: false, error: "기준 매물의 지역 정보를 확인할 수 없습니다.", retryable: false });
         return;
@@ -97,22 +107,14 @@ export default function SubscriptionInfoCard({ refreshKey = "", referenceSizeId 
     return () => controller.abort();
   }, [attempt, refreshKey, referenceSizeId, excludeClosed]);
 
-  useEffect(() => {
-    const validKeys = new Set(categoryOptions.map(category => category.key));
-    setSelectedCategories(prev => {
-      const next = prev.filter(category => validKeys.has(category));
-      return next.length === prev.length ? prev : next;
-    });
-  }, [categoryOptions]);
-
   // API가 내려준 분류·지역 그룹을 하나의 목록으로 펼친다. 각 항목은
   // 자기 카테고리 칩을 표시하고, 전체를 모집공고일 기준으로 정렬한다.
   const items = state.groups
     .flatMap(group => group.regions.flatMap(region => region.items))
     .filter(item => !excludeClosed || ["upcoming", "open"].includes(item.receipt_status))
     .filter(item => {
-      if (selectedCategories.length === 0) return true;
-      return selectedCategories.some(category => {
+      if (activeCategories.length === 0) return true;
+      return activeCategories.some(category => {
         if (category === "general-1" || category === "general-2") return item.category === "general";
         return item.category === category;
       });
@@ -128,12 +130,12 @@ export default function SubscriptionInfoCard({ refreshKey = "", referenceSizeId 
           <button type="button" className={`subscription-filter ${excludeClosed ? "is-active" : ""}`} aria-pressed={excludeClosed} onClick={() => setExcludeClosed(value => !value)}><span aria-hidden="true">✓</span> 마감제외</button>
           <span className="subscription-filter-divider" aria-hidden="true">|</span>
           <div className="subscription-region-picker" ref={categoryPicker} onKeyDown={event => { if (event.key === "Escape") { setCategoryOpen(false); categoryPicker.current?.querySelector("button")?.focus(); } }}>
-            <button type="button" className={`subscription-filter subscription-region-trigger ${selectedCategories.length > 0 || categoryOpen ? "is-active" : ""}`} aria-expanded={categoryOpen} aria-controls="subscription-category-options" onClick={event => { if (!categoryOpen) setCategoryDropUp(needsDropUp(event.currentTarget)); setCategoryOpen(value => !value); }}>
+            <button type="button" className={`subscription-filter subscription-region-trigger ${activeCategories.length > 0 || categoryOpen ? "is-active" : ""}`} aria-expanded={categoryOpen} aria-controls="subscription-category-options" onClick={event => { if (!categoryOpen) setCategoryDropUp(needsDropUp(event.currentTarget)); setCategoryOpen(value => !value); }}>
               <span>{categoryLabel}</span>
               <span className={`subscription-region-chevron ${categoryOpen ? "is-open" : ""}`} aria-hidden="true"><ChevronDownIcon /></span>
             </button>
             {categoryOpen && <div id="subscription-category-options" className={"subscription-region-options" + (categoryDropUp ? " is-drop-up" : "")} role="group" aria-label="청약 분류 선택">
-              <button type="button" className={`subscription-region-option ${selectedCategories.length === 0 ? "is-active" : ""}`} onClick={() => setSelectedCategories([])}>전체 분류</button>
+              <button type="button" className={`subscription-region-option ${activeCategories.length === 0 ? "is-active" : ""}`} onClick={() => setSelectedCategories([])}>전체 분류</button>
               {categoryOptions.map(option => {
                 const checked = selectedCategories.includes(option.key);
                 const toggleCategory = () => setSelectedCategories(prev => (checked ? prev.filter(value => value !== option.key) : [...prev, option.key]));
