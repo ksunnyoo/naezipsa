@@ -113,7 +113,7 @@ describe("그룹 점수 기준 편집 (GroupBar)", () => {
     const onUpdateScoring = vi.fn().mockResolvedValue(true);
     render(<GroupBar menu={{
       open: true, groups: [GROUP], activeGroup: null, selectedCount: 0,
-      servicePurposes: ["jeonse"], onUpdateScoring,
+      profile: { service_purposes: ["jeonse"] }, onUpdateScoring,
       onSelect: () => {}, onCreate: () => {}, onAddTo: () => {},
       onRename: () => {}, onDelete: () => {}, onStopShare: () => {},
       ...overrides,

@@ -77,7 +77,7 @@ export default function GroupBar({ menu }) {
   // 이용 목적(전세/매매)에서 온 기본값을 시작점으로 보여준다.
   function openScoring(group) {
     setScoringId(group.id);
-    setWeights(editableWeights(group, menu.servicePurposes));
+    setWeights(editableWeights(group, menu.profile));
   }
 
   async function saveWeights(group, next) {

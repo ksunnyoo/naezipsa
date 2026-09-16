@@ -139,27 +139,38 @@ describe("어느 가중치로 점수를 낼지 (그룹 > 프로필)", () => {
     interior_condition_group: 20, facility_group: 10,
   };
 
-  it("그룹에 정해둔 가중치가 프로필 기본보다 먼저다", () => {
-    expect(weightsForContext({ scoring_weights: CUSTOM }, ["jeonse"])).toBe(CUSTOM);
+  const MINE = {
+    transport_group: 10, education_life_group: 40, complex_group: 20,
+    interior_condition_group: 20, facility_group: 10,
+  };
+
+  it("그룹 기준 > 내 기본 기준 > 이용 목적 기본값 순이다", () => {
+    const profile = { service_purposes: ["jeonse"], scoring_weights: MINE };
+    // 1) 그룹이 정해뒀으면 그룹이 이긴다
+    expect(weightsForContext({ scoring_weights: CUSTOM }, profile)).toBe(CUSTOM);
+    // 2) 그룹이 없으면 내 기본 기준
+    expect(weightsForContext(null, profile)).toBe(MINE);
+    // 3) 내 기본도 없으면 이용 목적에서 고른 기본값
+    expect(weightsForContext(null, { service_purposes: ["jeonse"] })).toBe(CATEGORY_WEIGHTS.jeonse);
+    expect(weightsForContext({ scoring_weights: null }, { service_purposes: ["buy"] }))
+      .toBe(CATEGORY_WEIGHTS.buy);
   });
 
-  it("그룹을 안 보거나 그룹이 가중치를 안 정했으면 프로필 기본을 쓴다", () => {
-    expect(weightsForContext(null, ["jeonse"])).toBe(CATEGORY_WEIGHTS.jeonse);
-    expect(weightsForContext({ scoring_weights: null }, ["buy"])).toBe(CATEGORY_WEIGHTS.buy);
-  });
-
-  it("카테고리가 빠진 값은 믿지 않고 프로필 기본으로 돌아간다", () => {
-    expect(weightsForContext({ scoring_weights: { transport_group: 30 } }, ["buy"]))
+  it("카테고리가 빠진 값은 믿지 않고 다음 순위로 넘어간다", () => {
+    expect(weightsForContext({ scoring_weights: { transport_group: 30 } }, { service_purposes: ["buy"] }))
+      .toBe(CATEGORY_WEIGHTS.buy);
+    // 내 기본 기준이 깨져 있어도 마찬가지다.
+    expect(weightsForContext(null, { service_purposes: ["buy"], scoring_weights: { complex_group: 50 } }))
       .toBe(CATEGORY_WEIGHTS.buy);
   });
 
   it("편집 시작값은 항상 정수다 - 서버가 0~100 정수만 받는다", () => {
     // 전세·매매를 둘 다 고르면 기본값이 두 벌의 중간이라 소수가 나올 수 있다.
-    const middle = editableWeights(null, ["jeonse", "buy"]);
+    const middle = editableWeights(null, { service_purposes: ["jeonse", "buy"] });
     for (const { key } of WEIGHT_CATEGORIES) {
       expect(Number.isInteger(middle[key])).toBe(true);
     }
-    expect(editableWeights({ scoring_weights: CUSTOM }, [])).toEqual(CUSTOM);
+    expect(editableWeights({ scoring_weights: CUSTOM }, {})).toEqual(CUSTOM);
   });
 
   it("편집 화면의 카테고리는 체크리스트 묶음 5개와 같다", () => {

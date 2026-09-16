@@ -175,19 +175,42 @@ export const WEIGHT_CATEGORIES = CHECKLIST_GROUPS.map((group) => ({
 // 프로필 이용 목적에서 고른 기본 가중치를 쓴다. 그래서 같은 후보라도 어느 그룹에서
 // 보느냐에 따라 점수가 달라지는데, 그게 의도다 - 한 그룹 안에서는 모두 같은 자로
 // 재니까 그 안의 비교는 언제나 공정하다.
-export function weightsForContext(group, servicePurposes) {
-  const custom = group?.scoring_weights;
-  if (custom && WEIGHT_CATEGORIES.every(({ key }) => typeof custom[key] === "number")) {
-    return custom;
+// 5개 카테고리가 모두 숫자로 채워진 값만 믿는다. 일부만 있는 값으로 계산하면
+// 빠진 카테고리가 조용히 0이 되어 점수가 엉뚱해진다.
+function isCompleteWeights(weights) {
+  return Boolean(weights) && WEIGHT_CATEGORIES.every(({ key }) => typeof weights[key] === "number");
+}
+
+export function weightsForContext(group, profile) {
+  // 1) 이 그룹만의 기준이 있으면 그것
+  if (isCompleteWeights(group?.scoring_weights)) return group.scoring_weights;
+  // 2) 없으면 내가 정해둔 기본 기준
+  if (isCompleteWeights(profile?.scoring_weights)) return profile.scoring_weights;
+  // 3) 그것도 없으면 이용 목적(전세/매매)에서 고른 기본값
+  return weightsForPurposes(profile?.service_purposes);
+}
+
+// 지금 점수가 어느 기준으로 계산되고 있는지. 화면에서 "○○ 그룹 기준" /
+// "내 기본 기준" / "매매 기준"처럼 알려주고, 고친 값을 어디에 저장할지도 가른다.
+export function scoringSource(group, profile) {
+  if (isCompleteWeights(group?.scoring_weights)) {
+    return { kind: "group", groupId: group.id, label: `${group.name} 그룹 기준` };
   }
-  return weightsForPurposes(servicePurposes);
+  if (isCompleteWeights(profile?.scoring_weights)) {
+    return { kind: "profile", label: "내 기본 기준" };
+  }
+  const purposes = profile?.service_purposes;
+  const preset = !purposes?.length || (purposes.includes("jeonse") && purposes.some(p => p !== "jeonse"))
+    ? "전세·매매 중간"
+    : purposes.includes("jeonse") ? "전세" : "매매";
+  return { kind: "preset", label: `${preset} 기본값` };
 }
 
 // 가중치 편집을 시작할 때 쓸 값. 그룹에 정해둔 게 있으면 그것, 없으면 프로필
 // 기본을 시작점으로 준다. 서버가 0~100 정수만 받으므로 반올림해서 넘긴다
 // (목적을 둘 다 고른 경우의 기본값은 두 벌의 중간이라 소수가 될 수 있다).
-export function editableWeights(group, servicePurposes) {
-  const base = weightsForContext(group, servicePurposes);
+export function editableWeights(group, profile) {
+  const base = weightsForContext(group, profile);
   return Object.fromEntries(
     WEIGHT_CATEGORIES.map(({ key }) => [key, Math.round(base[key] ?? 0)]),
   );

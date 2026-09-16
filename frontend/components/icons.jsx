@@ -351,7 +351,7 @@ export function DocumentIcon() {
   );
 }
 
-// 매물 수정 팝업 우측 상단 "체크리스트 작성" 버튼용 클립보드+체크 아이콘.
+// 매물 수정 팝업 우측 상단 "임장 체크리스트" 버튼용 클립보드+체크 아이콘.
 export function ChecklistIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none">

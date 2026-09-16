@@ -42,7 +42,7 @@ function record(overrides = {}) {
 
 async function openChecklist(buttonName) {
   fireEvent.click(await screen.findByRole("button", { name: buttonName }));
-  fireEvent.click(await screen.findByRole("button", { name: "체크리스트 작성" }));
+  fireEvent.click(await screen.findByRole("button", { name: "임장 체크리스트" }));
 }
 
 beforeEach(() => {
@@ -70,7 +70,7 @@ describe("종합 평점 (EditListingDialog)", () => {
 
   it("항목을 고르면 종합 평점이 자동으로 계산돼 보인다", async () => {
     renderDialog();
-    fireEvent.click(screen.getByRole("button", { name: "체크리스트 작성" }));
+    fireEvent.click(screen.getByRole("button", { name: "임장 체크리스트" }));
     expect(screen.getByText("항목을 체크하면 종합 평점이 자동으로 계산돼요.")).toBeTruthy();
 
     // 첫 항목(대중교통 편리)을 "좋음"으로. 고르지 않은 묶음은 계산에서 빠지므로 5점.
@@ -80,7 +80,7 @@ describe("종합 평점 (EditListingDialog)", () => {
 
   it("직접 고른 평점이 자동 계산을 이기고, 다시 누르면 자동으로 돌아간다", async () => {
     const onSave = renderDialog();
-    fireEvent.click(screen.getByRole("button", { name: "체크리스트 작성" }));
+    fireEvent.click(screen.getByRole("button", { name: "임장 체크리스트" }));
     fireEvent.click(screen.getAllByLabelText("좋음")[0]);
 
     fireEvent.click(screen.getByLabelText("2")); // 자동 5점이지만 2점으로 고쳐 고른다
@@ -95,7 +95,7 @@ describe("종합 평점 (EditListingDialog)", () => {
 
   it("저장하면 체크리스트와 평점을 함께 올려보낸다", async () => {
     const onSave = renderDialog();
-    fireEvent.click(screen.getByRole("button", { name: "체크리스트 작성" }));
+    fireEvent.click(screen.getByRole("button", { name: "임장 체크리스트" }));
     fireEvent.click(screen.getAllByLabelText("좋음")[0]);
     fireEvent.click(screen.getByRole("button", { name: "저장" }));
 
@@ -109,7 +109,7 @@ describe("종합 평점 (EditListingDialog)", () => {
 
   it("저장해둔 값으로 화면을 채운다", () => {
     renderDialog({ initialChecklist: { transport: 1 }, initialRating: 4 });
-    fireEvent.click(screen.getByRole("button", { name: "체크리스트 작성" }));
+    fireEvent.click(screen.getByRole("button", { name: "임장 체크리스트" }));
     expect(screen.getAllByLabelText("나쁨")[0].checked).toBe(true);
     // 자동 계산은 1점인데 저장된 평점은 4점 - 직접 고른 값으로 보고 지킨다.
     expect(screen.getByLabelText("4").checked).toBe(true);

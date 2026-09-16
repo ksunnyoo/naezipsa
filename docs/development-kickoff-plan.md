@@ -1057,3 +1057,73 @@ ALTER TABLE groups ADD COLUMN scoring_weights JSON;
 파일: [frontend/components/Insight/SubscriptionInfoCard.jsx](../frontend/components/Insight/SubscriptionInfoCard.jsx), [globals.css](../frontend/app/globals.css), [frontend/tests/subscription-categories.test.jsx](../frontend/tests/subscription-categories.test.jsx). 백엔드 변경 없음.
 
 테스트: 프론트 신규 5개(새 분류가 필터·칩에 자동 표시, 알려진 색 유지·모르는 분류 기본 색, 새 분류로 걸러내기, 사라진 선택 무시). 전체 **122 passed**, `eslint` 오류 0개, `next build` 성공.
+
+## 점수 산출 "?" 도움말과 내 기본 기준 (2026-09-16)
+
+**계기:** "산출 점수 방식을 알리는 ?도 없고 산출 방식 수정도 없는 것 같다"는 지적. 확인해 보니 자동 계산 점수와 가중치 수정은 이미 있었지만 **찾기 어려운 자리**에 있었다.
+
+- 자동 계산 점수: 체크리스트 **맨 아래**(항목 18개 밑)라 스크롤해야 보였다.
+- 가중치 수정: **그룹 메뉴 안**이라 그룹을 안 쓰면 기능의 존재 자체를 몰랐다.
+- 산출 방식 설명: **아예 없었다.** 점수가 왜 그 값인지 화면만 봐서는 알 수 없었다.
+
+**결정(사용자):** 종합 평점 옆에 "?"를 두고, 그 안에 설명 + 카테고리별 비중 표 + **직접 수정**을 모은다. 그룹 메뉴의 "점수"는 부차적 경로로 남긴다.
+
+### 저장 위치를 두 층으로 나눴다
+
+"?"는 전체 후보 화면에서도 열리는데 그때는 보고 있는 그룹이 없어 고친 값을 저장할 곳이 없었다. 그래서 기준을 두 층으로 둔다(사용자 결정).
+
+| 저장 위치 | 언제 쓰나 |
+|---|---|
+| `groups.scoring_weights` | 그룹을 보는 중에 고치면 그 그룹에만 적용 |
+| `profiles.scoring_weights` | 전체 후보 화면에서 고치면 **내 기본 기준** |
+| (없으면) 이용 목적 기본값 | 전세/매매 프리셋 |
+
+점수를 낼 때는 **그룹 기준 > 내 기본 기준 > 이용 목적 기본값** 순으로 고른다. 5개 카테고리가 모두 숫자로 채워진 값만 믿는다 - 일부만 있는 값을 쓰면 빠진 카테고리가 조용히 0이 되어 점수가 엉뚱해진다.
+
+### 구현
+
+- **백엔드**
+  - `profiles.scoring_weights` JSON(nullable). migration `c8e14b2f60d9`.
+  - 가중치 검증 모델을 [backend/app/core/scoring.py](../backend/app/core/scoring.py)로 옮겨 그룹·프로필이 **같은 규칙**을 쓴다. 한쪽만 고쳐 규칙이 갈라지면 같은 값이 한 곳에선 저장되고 다른 곳에선 422가 되는 상황이 생긴다.
+  - 프로필 PATCH는 기존 "보낸 필드만 바꾼다"를 그대로 따른다. `scoring_weights: null`은 기준 지우기다.
+- **프론트**
+  - 종합 평점 옆 "?" → 지금 쓰는 기준 이름(`○○ 그룹 기준` / `내 기본 기준` / `매매 기본값`), 카테고리 5개 숫자 입력, 저장/기본값으로, 그리고 어디에 저장되는지 한 줄 안내.
+  - 저장 위치는 상위(NaejipsaApp)가 정한다 - 그룹을 보는 중이면 그룹 API로, 아니면 프로필 PATCH로 보낸다. 저장하면 그룹·프로필이 갱신되어 카드와 팝업 점수가 바로 다시 계산된다.
+  - 패널 저장 버튼은 팝업 아래 "저장"(매물 정보)과 구분되도록 `점수 기준 저장`이라는 이름을 준다. 이름이 같으면 화면을 소리로 읽는 사용자가 두 버튼을 구분할 수 없다.
+- **이름 변경:** "체크리스트 작성" → **"임장 체크리스트"**, 돌아가는 버튼은 "매물 정보 작성" → "매물 정보".
+
+### 수정 파일
+
+| 파일 | 변경 내용 |
+|---|---|
+| [backend/alembic/versions/20260916_1810_c8e14b2f60d9_add_profiles_scoring_weights.py](../backend/alembic/versions/20260916_1810_c8e14b2f60d9_add_profiles_scoring_weights.py) | 신규 마이그레이션(부모 `b7d3e5a19c42`) |
+| [backend/app/core/scoring.py](../backend/app/core/scoring.py) | 신규. 그룹·프로필 공용 가중치 검증 |
+| [backend/app/user/model.py](../backend/app/user/model.py), [schema.py](../backend/app/user/schema.py) | 프로필 기본 기준 |
+| [backend/app/group/schema.py](../backend/app/group/schema.py) | 중복 정의를 지우고 공용 모듈 사용 |
+| [frontend/lib/checklist.js](../frontend/lib/checklist.js) | 기준 3단계 선택, 지금 쓰는 기준 이름 |
+| [frontend/components/EditListingDialog.jsx](../frontend/components/EditListingDialog.jsx) | "?" 패널, 이름 변경 |
+| [frontend/components/NaejipsaApp.jsx](../frontend/components/NaejipsaApp.jsx) | 저장 위치 분기 |
+| [frontend/components/Dashboard/GroupBar.jsx](../frontend/components/Dashboard/GroupBar.jsx), [icons.jsx](../frontend/components/icons.jsx), [globals.css](../frontend/app/globals.css) | 프로필 기준 전달, 문구, 스타일 |
+| [frontend/tests/scoring-help.test.jsx](../frontend/tests/scoring-help.test.jsx) 외 3개, [backend/tests/test_profile_onboarding.py](../backend/tests/test_profile_onboarding.py) | 테스트 |
+
+### DB migration
+
+새 리비전 `c8e14b2f60d9`(부모 `b7d3e5a19c42`, head 1개). **2026-09-16 적용 완료.** 실행 문장은 `ALTER TABLE profiles ADD COLUMN scoring_weights JSON;` 하나다.
+
+- **적용 결과:** `b7d3e5a19c42` → `c8e14b2f60d9`. 프로필 6행 그대로, 값은 전부 NULL이라 지금까지 보이던 점수가 달라지지 않는다.
+- **적용 전 증상(기록):** 코드가 없는 컬럼을 읽어 **프로필 조회가 전부 500**이었다(`test_auth.py`가 실제 공용 DB를 쓰기 때문에 테스트로도 드러났다). 팀원은 main을 받은 뒤 **서버 재시작**이 필요하다.
+
+### 테스트
+
+- **백엔드 348 passed.** 신규: 프로필 기준 저장·지우기, 닉네임만 바꿔도 기준이 유지되는지, 잘못된 값 거부(카테고리 누락·범위 밖·전부 0). 기존 프로필 응답 키 검사도 새 필드에 맞춰 고쳤다.
+- **프론트 128 passed**(신규 7개): 지금 쓰는 기준 표시, 그룹을 볼 때와 전체 후보일 때 저장 위치 안내가 다른지, 고친 값이 5개 모두 담겨 나가는지, "기본값으로"가 null을 보내는지, 전부 0이면 저장 불가, 저장 성공 시 패널이 닫히는지.
+- `eslint` 오류 0개(기존 `<img>` 경고 16개), `next build` 성공.
+
+### 수동 확인 필요
+
+1. 후보 카드 연필 → **"임장 체크리스트"** 버튼 이름이 바뀌었는지 확인한다.
+2. 항목을 몇 개 체크하고 **맨 아래**에서 "자동 계산 N점" 옆 **"?"** 를 누른다. 지금 쓰는 기준 이름과 카테고리 5개 숫자가 보이는지 확인한다.
+3. 전체 후보 화면에서 교통 비중을 크게 올리고 저장 → 점수가 바뀌고, 다른 후보 카드 점수도 같이 바뀌는지 확인한다(내 기본 기준이므로).
+4. 그룹을 보는 중에 같은 일을 하면 **그 그룹에서만** 바뀌고 전체 후보로 나오면 원래대로인지 확인한다.
+5. "기본값으로"를 누르면 이용 목적(전세/매매) 기본값으로 돌아오는지 확인한다.
+6. 로그아웃 상태에서 "?"를 열어 저장하면 로그인 안내가 뜨는지 확인한다.

@@ -294,7 +294,7 @@ export default function NaejipsaApp() {
   // 보고 있으면 그 그룹 기준, 전체 후보 화면이면 프로필 기본(전세/매매)이다.
   // 같은 후보라도 그룹을 옮기면 점수가 달라 보이지만, 한 그룹 안에서는 모두 같은
   // 자로 재기 때문에 그 안의 비교는 언제나 공정하다(2026-09-16 결정).
-  const scoringWeights = weightsForContext(shownGroup, profile?.service_purposes);
+  const scoringWeights = weightsForContext(shownGroup, profile);
   const visibleItems = scopedItems.map((item) => {
     const saved = itemChecklists[checklistKey(item)];
     const score = saved ? computeOverallScore(saved.values, scoringWeights)?.score : null;
@@ -466,6 +466,26 @@ export default function NaejipsaApp() {
       return true;
     } catch (err) {
       toast.show(err.message);
+      return false;
+    }
+  }
+
+  // 체크리스트의 "?"에서 점수 기준을 고쳤을 때. 어디에 저장할지는 지금 보고 있는
+  // 화면이 정한다 - 그룹을 보는 중이면 그 그룹에, 전체 후보 화면이면 내 기본
+  // 기준(프로필)에 저장한다. weights가 null이면 정해둔 기준을 지운다.
+  // 저장하면 profile이나 그룹이 갱신되어 카드·팝업 점수가 바로 다시 계산된다.
+  async function handleSaveWeights(weights) {
+    if (shownGroup) return handleUpdateScoring(shownGroup.id, weights);
+    if (!user) {
+      toast.show("로그인 후 이용할 수 있어요");
+      return false;
+    }
+    try {
+      await saveProfile({ scoring_weights: weights });
+      toast.show(weights ? "점수 기준을 저장했어요" : "점수 기준을 기본값으로 되돌렸어요");
+      return true;
+    } catch {
+      toast.show("점수 기준을 저장하지 못했어요. 잠시 후 다시 시도해주세요.");
       return false;
     }
   }
@@ -949,8 +969,8 @@ export default function NaejipsaApp() {
             onDelete: handleDeleteGroup,
             onStopShare: handleStopGroupShare,
             onUpdateScoring: handleUpdateScoring,
-            // 그룹이 점수 기준을 정하지 않았을 때 편집 시작값으로 쓸 프로필 기본.
-            servicePurposes: profile?.service_purposes,
+            // 그룹이 기준을 정하지 않았을 때 쓸 내 기본 기준(과 이용 목적)을 넘긴다.
+            profile,
           }}
           onShare={handleShare}
         />
@@ -1008,8 +1028,10 @@ export default function NaejipsaApp() {
         item={editingItem}
         initialChecklist={itemChecklists[checklistKey(editingItem)]?.values}
         initialRating={itemChecklists[checklistKey(editingItem)]?.rating ?? null}
-        servicePurposes={profile?.service_purposes}
+        group={shownGroup}
+        profile={profile}
         onSave={handleEditSave}
+        onSaveWeights={handleSaveWeights}
         onCancel={() => setEditingItemId(null)}
       />
       <ImportShareModal

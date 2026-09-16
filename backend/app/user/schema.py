@@ -18,6 +18,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.core.scoring import ScoringWeights
+
 AgeGroup = Literal["20s", "30s", "40s", "50s", "60s+"]
 ServicePurpose = Literal["move", "buy", "jeonse", "invest"]
 
@@ -33,6 +35,9 @@ class ProfileResponse(BaseModel):
     nickname: str | None = None
     age_group: AgeGroup | None = None
     service_purposes: list[ServicePurpose] | None = None
+    # 내 기본 임장 점수 기준. null이면 따로 정하지 않은 것이라 화면이 이용 목적
+    # (전세/매매)의 기본값으로 점수를 낸다.
+    scoring_weights: ScoringWeights | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -48,3 +53,5 @@ class ProfileUpdateRequest(BaseModel):
     nickname: str | None = Field(default=None, min_length=1, max_length=30)
     age_group: AgeGroup | None = None
     service_purposes: list[ServicePurpose] | None = Field(default=None, max_length=4)
+    # null을 명시적으로 보내면 기본 기준을 지운다(이용 목적 기반 기본값으로 돌아간다).
+    scoring_weights: ScoringWeights | None = None

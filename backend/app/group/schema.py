@@ -1,7 +1,9 @@
 """[A] group · schema — 그룹 API 요청·응답 모양 (Phase 4, 공유 링크 Phase 5)."""
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
+
+from app.core.scoring import ScoringWeights
 
 from app.dashboard.model import MAX_DASHBOARD_ITEMS
 from app.dashboard.schema import (
@@ -48,27 +50,6 @@ class GroupCreateRequest(BaseModel):
         return _unique_ids(value)
 
 
-class ScoringWeights(BaseModel):
-    """임장 점수의 카테고리 비중. 체크리스트 묶음 5개와 키가 같다.
-
-    합이 100일 필요는 없다 - 점수를 낼 때 "고른 항목이 있는 묶음"의 가중치 합으로
-    나눠 정규화하므로, 비중의 비율만 의미가 있다. 다만 값을 읽고 고치는 사람이
-    헷갈리지 않게 화면은 합 100을 기본으로 보여준다.
-    """
-
-    model_config = ConfigDict(extra="forbid")
-
-    transport_group: int = Field(ge=0, le=100)
-    education_life_group: int = Field(ge=0, le=100)
-    complex_group: int = Field(ge=0, le=100)
-    interior_condition_group: int = Field(ge=0, le=100)
-    facility_group: int = Field(ge=0, le=100)
-
-    @model_validator(mode="after")
-    def require_one_positive(self):
-        if all(value == 0 for value in self.model_dump().values()):
-            raise ValueError("가중치를 하나 이상 0보다 크게 정해 주세요.")
-        return self
 
 
 class GroupUpdateRequest(BaseModel):
