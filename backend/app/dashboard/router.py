@@ -1,7 +1,7 @@
 """[dashboard] router — 후보 매물·대시보드 엔드포인트 (A-03~A-09).
 
 흐름   main ▶ security ▶ deps ▶ ★router ▶ service ▶ model / schema
-경로   /api/v1/dashboard, /api/v1/dashboard/items[/{id}[/details|/status]]
+경로   /api/v1/dashboard, /api/v1/dashboard/items[/order|/{id}[/details|/status]]
 소유   A
 
 A-03~A-09: 후보 매물 CRUD와 대시보드 집계.
@@ -11,6 +11,7 @@ A-03~A-09: 후보 매물 CRUD와 대시보드 집계.
   1. 한 사용자당 최대 6개              -> 7번째 등록은 409로 차단
   2. 등록 필수값은 size_id 하나뿐      -> 나머지는 나중에 채울 수 있음
   3. 남의 후보는 조회·수정·삭제 불가   -> 모든 쿼리에 user_id 조건을 함께 건다
+  4. 표시 순서는 사용자가 저장한 순서 -> 등록·삭제·순서 저장은 profiles 행 잠금으로 한 줄로 세운다
 
 ⚠️ user_id를 요청 body나 query로 절대 받지 않는다.
    받는 순간 "남의 id를 적어 보내면 남의 데이터가 보이는" 구멍이 된다.
@@ -23,23 +24,17 @@ A-03~A-09: 후보 매물 CRUD와 대시보드 집계.
 import secrets
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_profile
 from app.core.database import get_db
-from app.dashboard.model import (
-    MAX_DASHBOARD_GROUPS,
-    MAX_DASHBOARD_ITEMS,
-    DashboardItem,
-    DashboardItemGroup,
-    DashboardShare,
-)
+from app.dashboard.model import MAX_DASHBOARD_ITEMS, DashboardItem, DashboardShare
 from app.inspection.model import PropertyInspection
 from app.dashboard.service import (
+    ITEM_ORDER,
     enrich_snapshot_items,
     get_items_with_metrics,
-    replace_dashboard_items,
     size_exists,
     snapshot_current_items,
 )
@@ -47,10 +42,6 @@ from app.user.model import Profile
 from app.dashboard.schema import (
 
     DashboardItemCreateRequest,
-    DashboardItemGroupCreateRequest,
-    DashboardItemGroupListResponse,
-    DashboardItemGroupRenameRequest,
-    DashboardItemGroupSummary,
     DashboardItemListResponse,
     DashboardItemResponse,
     DashboardResponse,
@@ -58,6 +49,8 @@ from app.dashboard.schema import (
     DashboardShareResponse,
     ItemDeletedResponse,
     ItemDetailsRequest,
+    ItemOrderRequest,
+    ItemOrderResponse,
     ItemStatusRequest,
 )
 
@@ -65,9 +58,8 @@ router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
 
 def _my_items(db: Session, user_id):
-    """내 후보 전체를 등록순으로, 단지명·시세 지표까지 붙여서.
+    """내 후보 전체를 저장한 순서(sort_order, 같으면 등록순)로, 단지명·시세 지표까지 붙여서.
 
-    표시 순서는 프론트가 정하므로 백엔드는 등록순만 준다.
     지표를 붙이는 방법은 app/dashboard/service.py 참고.
     """
     return get_items_with_metrics(db, user_id)
@@ -93,6 +85,16 @@ def _get_owned_item(db: Session, user_id, item_id: int, *, lock: bool = False) -
             detail="해당 후보 매물을 찾을 수 없습니다.",
         )
     return item
+
+
+def _lock_owner(db: Session, user_id) -> None:
+    """같은 사용자의 후보 등록·삭제·순서 저장을 한 줄로 세운다.
+
+    profiles 행을 FOR UPDATE로 잠가, 동시에 들어온 요청이 서로의 결과(후보 수·순번)를
+    보지 못한 채 쓰는 일을 막는다. 잠금은 commit/rollback 때 풀린다.
+    잠그는 순서는 항상 profiles → dashboard_items다.
+    """
+    db.execute(select(Profile.id).where(Profile.id == user_id).with_for_update())
 
 
 # --- A-09: 첫 화면 집계 ----------------------------------------------------
@@ -148,8 +150,10 @@ def create_item(
     """A-03: 후보 등록. 필수값은 size_id 하나뿐이다.
 
     최대 6개 규칙은 DB 제약으로 표현할 수 없어서(개수 상한은 CHECK로 못 건다)
-    여기서 세어 보고 막는다.
+    여기서 세어 보고 막는다. 새 후보는 내 목록 맨 뒤 순번을 받는다.
     """
+    # 같은 사용자의 등록이 동시에 들어와도 개수 상한과 순번이 어긋나지 않게 한 줄로 세운다.
+    _lock_owner(db, profile.id)
     count = db.execute(
         select(func.count())
         .select_from(DashboardItem)
@@ -172,12 +176,67 @@ def create_item(
                    "기존 후보를 삭제한 뒤 다시 시도해 주세요.",
         )
 
+    # 새 후보는 내 목록 맨 뒤에 둔다. 빈 목록이면 0부터 시작한다.
+    next_order = db.execute(
+        select(func.coalesce(func.max(DashboardItem.sort_order) + 1, 0))
+        .where(DashboardItem.user_id == profile.id)
+    ).scalar_one()
+
     # status는 받지 않고 DB 기본값(considering)에 맡긴다.
-    item = DashboardItem(user_id=profile.id, **payload.model_dump())
+    item = DashboardItem(user_id=profile.id, sort_order=next_order, **payload.model_dump())
     db.add(item)
     db.commit()
     db.refresh(item)
     return item
+
+
+# --- 정렬 순서 저장 (Phase 3 보완) ------------------------------------------
+# 정적 경로라 /items/{item_id} 계열보다 먼저 선언한다.
+
+@router.patch("/items/order", response_model=ItemOrderResponse)
+def save_item_order(
+    payload: ItemOrderRequest,
+    profile: Profile = Depends(get_current_profile),
+    db: Session = Depends(get_db),
+):
+    """내 전체 후보의 표시 순서를 한 번에 저장한다.
+
+        {"item_ids": [11, 14, 13, 12], "expected_item_ids": [11, 12, 13, 14]}
+
+    - 남의 후보나 없는 id가 item_ids에 섞이면 404(존재 여부를 드러내지 않는다).
+    - 내 후보 일부가 빠졌거나 expected_item_ids가 지금 서버 순서와 다르면(다른 탭·기기에서
+      목록이 바뀜) 아무것도 저장하지 않고 409. 프론트는 목록을 새로 불러온다.
+    - 순번만 바꾼다. checked·호가·메모·그룹 관계·임장 기록은 건드리지 않는다.
+    """
+    _lock_owner(db, profile.id)
+    current = db.execute(
+        select(DashboardItem.id, DashboardItem.sort_order)
+        .where(DashboardItem.user_id == profile.id)
+        .order_by(*ITEM_ORDER)
+    ).all()
+    current_ids = [item_id for item_id, _ in current]
+
+    if not set(payload.item_ids) <= set(current_ids):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="해당 후보 매물을 찾을 수 없습니다.",
+        )
+    if len(payload.item_ids) != len(current_ids) or payload.expected_item_ids != current_ids:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="다른 곳에서 관심 매물 목록이 바뀌었습니다. 목록을 새로 불러온 뒤 다시 시도해 주세요.",
+        )
+
+    saved_order = dict(current)
+    for position, item_id in enumerate(payload.item_ids):
+        if saved_order[item_id] != position:
+            db.execute(
+                update(DashboardItem)
+                .where(DashboardItem.id == item_id, DashboardItem.user_id == profile.id)
+                .values(sort_order=position)
+            )
+    db.commit()
+    return ItemOrderResponse(item_ids=payload.item_ids)
 
 
 # --- A-05: 상세 -----------------------------------------------------------
@@ -232,7 +291,7 @@ def update_item_status(
 ):
     """A-07: 후보 상태 변경 (considering / interested / excluded).
 
-    우선순위·표시 순서는 백엔드에서 관리하지 않는다. 상태만 바꾼다.
+    상태만 바꾼다. 표시 순서는 PATCH /dashboard/items/order 에서 저장한다.
     """
     item = _get_owned_item(db, profile.id, item_id)
     item.status = payload.status
@@ -251,8 +310,9 @@ def delete_item(
 ):
     """A-08: 후보 삭제. 남의 후보 id를 찍어 보내도 404가 나고 지워지지 않는다.
 
-    삭제 후 남은 후보의 재정렬은 하지 않는다(표시 순서는 프론트 몫).
+    삭제로 생긴 빈 순번은 그대로 둔다(남은 후보의 상대 순서는 유지된다).
     """
+    _lock_owner(db, profile.id)
     item = _get_owned_item(db, profile.id, item_id, lock=True)
     if db.scalar(select(PropertyInspection.id).where(
         PropertyInspection.property_id == item.id
@@ -264,171 +324,6 @@ def delete_item(
     db.delete(item)
     db.commit()
     return ItemDeletedResponse(deleted_id=item_id)
-
-
-# --- 그룹 저장/불러오기 -----------------------------------------------------
-#
-# "그룹"은 그 시점의 관심 매물 전체를 이름 붙여 떠둔 스냅샷이다.
-# 저장은 서버가 "지금 dashboard_items"에서 직접 스냅샷을 뜨고(프론트가
-# 항목을 다시 보낼 필요 없음), 불러오기는 그 스냅샷으로 dashboard_items를
-# 통째로 교체한다(사용자 확정: 부분 병합이 아니라 완전 교체).
-
-@router.get("/groups", response_model=DashboardItemGroupListResponse)
-def list_groups(
-    profile: Profile = Depends(get_current_profile),
-    db: Session = Depends(get_db),
-):
-    """저장된 그룹 목록. 하위 버튼엔 이름만 필요해서 항목은 안 담는다."""
-    groups = db.execute(
-        select(DashboardItemGroup)
-        .where(DashboardItemGroup.user_id == profile.id)
-        .order_by(DashboardItemGroup.created_at)
-    ).scalars().all()
-    return DashboardItemGroupListResponse(
-        groups=groups, count=len(groups), max_count=MAX_DASHBOARD_GROUPS,
-    )
-
-
-@router.post("/groups", response_model=DashboardItemGroupSummary, status_code=status.HTTP_201_CREATED)
-def create_group(
-    payload: DashboardItemGroupCreateRequest,
-    profile: Profile = Depends(get_current_profile),
-    db: Session = Depends(get_db),
-):
-    """지금 관심 매물을 이름 붙여 그룹으로 저장."""
-    count = db.execute(
-        select(func.count())
-        .select_from(DashboardItemGroup)
-        .where(DashboardItemGroup.user_id == profile.id)
-    ).scalar_one()
-    if count >= MAX_DASHBOARD_GROUPS:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"그룹은 최대 {MAX_DASHBOARD_GROUPS}개까지 저장할 수 있습니다. "
-                   "기존 그룹을 삭제한 뒤 다시 시도해 주세요.",
-        )
-
-    items = snapshot_current_items(db, profile.id)
-    if not items:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="저장할 관심 매물이 없습니다. 먼저 매물을 추가해 주세요.",
-        )
-
-    group = DashboardItemGroup(user_id=profile.id, name=payload.name, items=items)
-    db.add(group)
-    db.commit()
-    db.refresh(group)
-    return group
-
-
-@router.post("/groups/{group_id}/rename", response_model=DashboardItemGroupSummary)
-def rename_group(
-    group_id: int,
-    payload: DashboardItemGroupRenameRequest,
-    profile: Profile = Depends(get_current_profile),
-    db: Session = Depends(get_db),
-):
-    """그룹 이름만 바꾼다 - 저장된 매물 스냅샷(items)은 그대로 둔다."""
-    group = db.execute(
-        select(DashboardItemGroup).where(
-            DashboardItemGroup.id == group_id,
-            DashboardItemGroup.user_id == profile.id,
-        )
-    ).scalar_one_or_none()
-    if group is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="해당 그룹을 찾을 수 없습니다.",
-        )
-    group.name = payload.name
-    db.commit()
-    db.refresh(group)
-    return group
-
-
-@router.post("/groups/{group_id}/save", response_model=DashboardItemGroupSummary)
-def save_group(
-    group_id: int,
-    profile: Profile = Depends(get_current_profile),
-    db: Session = Depends(get_db),
-):
-    """지금 관심 매물 상태를 이 그룹에 덮어써 갱신한다 - 새 그룹을 만드는
-    게 아니라 기존 스냅샷 자체를 교체한다. 다른 그룹을 불러온 뒤 편집한
-    내용을 원래 그룹에 반영하고 싶을 때 쓴다(자동저장은 하지 않음 - 그룹은
-    사용자가 명시적으로 눌러야만 바뀌는 고정 스냅샷이어야 나중에 비교
-    기준으로 쓸 수 있다)."""
-    group = db.execute(
-        select(DashboardItemGroup).where(
-            DashboardItemGroup.id == group_id,
-            DashboardItemGroup.user_id == profile.id,
-        )
-    ).scalar_one_or_none()
-    if group is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="해당 그룹을 찾을 수 없습니다.",
-        )
-
-    items = snapshot_current_items(db, profile.id)
-    if not items:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="저장할 관심 매물이 없습니다. 먼저 매물을 추가해 주세요.",
-        )
-
-    group.items = items
-    db.commit()
-    db.refresh(group)
-    return group
-
-
-@router.post("/groups/{group_id}/load", response_model=DashboardItemListResponse)
-def load_group(
-    group_id: int,
-    profile: Profile = Depends(get_current_profile),
-    db: Session = Depends(get_db),
-):
-    """그룹 불러오기. 지금 관심 매물 목록을 그룹 내용으로 완전히 교체한다."""
-    group = db.execute(
-        select(DashboardItemGroup).where(
-            DashboardItemGroup.id == group_id,
-            DashboardItemGroup.user_id == profile.id,
-        )
-    ).scalar_one_or_none()
-    if group is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="해당 그룹을 찾을 수 없습니다.",
-        )
-
-    replace_dashboard_items(db, profile.id, group.items)
-    items = _my_items(db, profile.id)
-    return DashboardItemListResponse(
-        items=items, count=len(items), max_count=MAX_DASHBOARD_ITEMS,
-    )
-
-
-@router.delete("/groups/{group_id}", response_model=ItemDeletedResponse)
-def delete_group(
-    group_id: int,
-    profile: Profile = Depends(get_current_profile),
-    db: Session = Depends(get_db),
-):
-    group = db.execute(
-        select(DashboardItemGroup).where(
-            DashboardItemGroup.id == group_id,
-            DashboardItemGroup.user_id == profile.id,
-        )
-    ).scalar_one_or_none()
-    if group is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="해당 그룹을 찾을 수 없습니다.",
-        )
-    db.delete(group)
-    db.commit()
-    return ItemDeletedResponse(deleted_id=group_id)
 
 
 # --- 공유 --------------------------------------------------------------

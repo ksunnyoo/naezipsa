@@ -27,6 +27,7 @@ from app.property.service import (
     compute_recent_median_price,
     compute_price_per_pyeong,
     compute_jeonse_gap,
+    compute_trade_points,
     exclude_incomplete_recent,
     to_won,
     _get_size_and_complex,
@@ -274,6 +275,46 @@ def get_liquidity(
         "period_months": result["period_months"],
         "sale_count": result["sale_count"],
         "jeonse_count": result["jeonse_count"],
+    }
+
+
+@router.get("/{size_id}/trade-points")
+def get_trade_points(
+    size_id: int,
+    months: int = Query(12, description="3, 12, 36 중 선택 (실거래 분포도 차트, 2026-09 프론트 요구사항)"),
+    type: str = Query("sale", description="sale(매매) 또는 jeonse(전세)"),
+    db: Session = Depends(get_db),
+):
+    """실거래 분포도 차트 전용 — 개별 거래가 포인트 + 기간 내 평균가.
+
+    /price-distribution(B-07)은 층별 분포용이라 기간 선택이 없고 매매만 다루는데,
+    이 차트는 3/12/36개월 기간 선택과 매매/전세 전환이 둘 다 필요해서 별도로 뒀다.
+    금액 단위는 팀 규칙대로 원(₩) — to_won()으로 여기서 변환해서 내보낸다.
+    """
+    if type == "jeonse":
+        records = get_rents_for_size(db, size_id, pure_jeonse_only=True)
+        amount_attr = "deposit"
+    else:
+        records = get_trades_for_size(db, size_id)
+        amount_attr = "deal_amount"
+
+    result = compute_trade_points(records, months, amount_attr=amount_attr)
+
+    return {
+        "size_id": size_id,
+        "months": months,
+        "type": type,
+        "count": result["count"],
+        "average_price": to_won(result["average_price"]),
+        "points": [
+            {
+                "deal_amount": to_won(p["deal_amount"]),
+                "deal_year": p["deal_year"],
+                "deal_month": p["deal_month"],
+                "floor": p["floor"],
+            }
+            for p in result["points"]
+        ],
     }
 
 

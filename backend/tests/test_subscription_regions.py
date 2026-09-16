@@ -100,3 +100,19 @@ def test_exclude_closed_happens_before_region_limit():
     regions = result["data"][0]["regions"]
     assert [group["region"] for group in regions] == ["서울", "경기"]
     assert regions[0]["items"][0]["receipt_status"] == "upcoming"
+
+
+def test_nearby_closes_db_transaction_before_external_call():
+    """청약홈 API를 기다리는 동안 DB 연결을 쥐고 있지 않도록 조회 직후 트랜잭션을 끝낸다."""
+    from app.subscription.router import get_nearby_subscription
+    db = Mock()
+    db.execute.return_value.scalar_one_or_none.return_value = "11680"
+    committed_before_fetch = []
+
+    def fetch(**kwargs):
+        committed_before_fetch.append(db.commit.called)
+        return [announcement("서울")]
+
+    with patch("app.subscription.router.fetch_categorized_announcements", side_effect=fetch):
+        get_nearby_subscription(123, 30, db)
+    assert committed_before_fetch == [True]

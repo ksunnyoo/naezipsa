@@ -116,6 +116,8 @@ export function fromBackendItem(raw, localId) {
     regulations: regulationsFromBackend(raw.regulation),
     complexId: null,
     sizeId: raw.size_id,
-    checked: true,
+    // 체크 상태는 서버에 저장된 값으로 복원한다. checked가 없는 예전 응답이면
+    // 기존 기본값(체크됨)을 쓴다.
+    checked: raw.checked ?? true,
   };
 }

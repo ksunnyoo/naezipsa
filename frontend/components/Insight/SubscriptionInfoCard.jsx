@@ -16,6 +16,17 @@ const CATEGORIES = [
 ];
 const CATEGORY_MAP = Object.fromEntries(CATEGORIES.map(category => [category.key, category]));
 const STATUS_LABELS = { closed: "마감", open: "접수 중", upcoming: "접수 예정" };
+// 분류/지역 선택 팝업이 아래로 펼쳐질 공간이 부족하면(.subscription-region-options의
+// CSS max-height 240px + 트리거와의 간격 6px) 그만큼 뷰포트 아래쪽 여유가 없다는
+// 뜻이고, 그 상태로 펼치면 팝업이 뷰포트 밖으로 밀려나 전체 화면에 스크롤이
+// 생긴다(인사이트 영역 높이를 키운 뒤로 청약 카드가 낮아지면서 자주 발생). 트리거
+// 버튼 기준 아래 공간이 부족하면 위로 펼치도록(is-drop-up) 판단한다.
+const POPUP_CLEARANCE = 246;
+function needsDropUp(triggerEl) {
+  if (!triggerEl) return false;
+  const { bottom } = triggerEl.getBoundingClientRect();
+  return window.innerHeight - bottom < POPUP_CLEARANCE;
+}
 
 export default function SubscriptionInfoCard({ refreshKey = "", referenceSizeId }) {
   const [state, setState] = useState({ groups: [], loading: true, error: "", guest: false });
@@ -25,9 +36,11 @@ export default function SubscriptionInfoCard({ refreshKey = "", referenceSizeId 
   // 배열로 관리한다. 빈 배열은 "전체"를 뜻한다.
   const [selectedCategories, setSelectedCategories] = useState([]);
   const [categoryOpen, setCategoryOpen] = useState(false);
+  const [categoryDropUp, setCategoryDropUp] = useState(false);
   const categoryPicker = useRef(null);
   const [selectedRegions, setSelectedRegions] = useState([]);
   const [regionOpen, setRegionOpen] = useState(false);
+  const [regionDropUp, setRegionDropUp] = useState(false);
   const regionPicker = useRef(null);
   const regionNames = ["서울", "경기", "인천", "강원", "충북", "충남", "세종", "대전", "전북", "전남", "광주", "경북", "대구", "경남", "울산", "부산", "제주"];
   const categoryLabel = selectedCategories.length === 0
@@ -89,11 +102,11 @@ export default function SubscriptionInfoCard({ refreshKey = "", referenceSizeId 
           <button type="button" className={`subscription-filter ${excludeClosed ? "is-active" : ""}`} aria-pressed={excludeClosed} onClick={() => setExcludeClosed(value => !value)}><span aria-hidden="true">✓</span> 마감제외</button>
           <span className="subscription-filter-divider" aria-hidden="true">|</span>
           <div className="subscription-region-picker" ref={categoryPicker} onKeyDown={event => { if (event.key === "Escape") { setCategoryOpen(false); categoryPicker.current?.querySelector("button")?.focus(); } }}>
-            <button type="button" className={`subscription-filter subscription-region-trigger ${selectedCategories.length > 0 || categoryOpen ? "is-active" : ""}`} aria-expanded={categoryOpen} aria-controls="subscription-category-options" onClick={() => setCategoryOpen(value => !value)}>
+            <button type="button" className={`subscription-filter subscription-region-trigger ${selectedCategories.length > 0 || categoryOpen ? "is-active" : ""}`} aria-expanded={categoryOpen} aria-controls="subscription-category-options" onClick={event => { if (!categoryOpen) setCategoryDropUp(needsDropUp(event.currentTarget)); setCategoryOpen(value => !value); }}>
               <span>{categoryLabel}</span>
               <span className={`subscription-region-chevron ${categoryOpen ? "is-open" : ""}`} aria-hidden="true"><ChevronDownIcon /></span>
             </button>
-            {categoryOpen && <div id="subscription-category-options" className="subscription-region-options" role="group" aria-label="청약 분류 선택">
+            {categoryOpen && <div id="subscription-category-options" className={"subscription-region-options" + (categoryDropUp ? " is-drop-up" : "")} role="group" aria-label="청약 분류 선택">
               <button type="button" className={`subscription-region-option subscription-region-option--all ${selectedCategories.length === 0 ? "is-active" : ""}`} onClick={() => setSelectedCategories([])}>전체 분류</button>
               {CATEGORIES.map(category => {
                 const checked = selectedCategories.includes(category.key);
@@ -101,9 +114,13 @@ export default function SubscriptionInfoCard({ refreshKey = "", referenceSizeId 
                   <label key={category.key} className={`subscription-region-option subscription-region-checkbox ${checked ? "is-active" : ""}`}>
                     <input
                       type="checkbox"
+                      className="subscription-checkbox-input"
                       checked={checked}
                       onChange={() => setSelectedCategories(prev => (checked ? prev.filter(value => value !== category.key) : [...prev, category.key]))}
                     />
+                    <span className={"subscription-checkbox-box" + (checked ? " is-checked" : "")}>
+                      {checked && <img className="subscription-checkbox-icon" src="/check-icon.png" alt="" />}
+                    </span>
                     <span>{category.label}</span>
                   </label>
                 );
@@ -112,11 +129,11 @@ export default function SubscriptionInfoCard({ refreshKey = "", referenceSizeId 
           </div>
           <span className="subscription-filter-divider" aria-hidden="true">|</span>
           <div className="subscription-region-picker" ref={regionPicker} onKeyDown={event => { if (event.key === "Escape") { setRegionOpen(false); regionPicker.current?.querySelector("button")?.focus(); } }}>
-            <button type="button" className={`subscription-filter subscription-region-trigger ${selectedRegions.length > 0 || regionOpen ? "is-active" : ""}`} aria-expanded={regionOpen} aria-controls="subscription-region-options" onClick={() => setRegionOpen(value => !value)}>
+            <button type="button" className={`subscription-filter subscription-region-trigger ${selectedRegions.length > 0 || regionOpen ? "is-active" : ""}`} aria-expanded={regionOpen} aria-controls="subscription-region-options" onClick={event => { if (!regionOpen) setRegionDropUp(needsDropUp(event.currentTarget)); setRegionOpen(value => !value); }}>
               <span>{regionLabel}</span>
               <span className={`subscription-region-chevron ${regionOpen ? "is-open" : ""}`} aria-hidden="true"><ChevronDownIcon /></span>
             </button>
-            {regionOpen && <div id="subscription-region-options" className="subscription-region-options" role="group" aria-label="청약 지역 선택">
+            {regionOpen && <div id="subscription-region-options" className={"subscription-region-options" + (regionDropUp ? " is-drop-up" : "")} role="group" aria-label="청약 지역 선택">
               <button type="button" className={`subscription-region-option subscription-region-option--all ${selectedRegions.length === 0 ? "is-active" : ""}`} onClick={() => setSelectedRegions([])}>전체 지역</button>
               {regionNames.map(region => {
                 const checked = selectedRegions.includes(region);
@@ -124,9 +141,13 @@ export default function SubscriptionInfoCard({ refreshKey = "", referenceSizeId 
                   <label key={region} className={`subscription-region-option subscription-region-checkbox ${checked ? "is-active" : ""}`}>
                     <input
                       type="checkbox"
+                      className="subscription-checkbox-input"
                       checked={checked}
                       onChange={() => setSelectedRegions(prev => (checked ? prev.filter(value => value !== region) : [...prev, region]))}
                     />
+                    <span className={"subscription-checkbox-box" + (checked ? " is-checked" : "")}>
+                      {checked && <img className="subscription-checkbox-icon" src="/check-icon.png" alt="" />}
+                    </span>
                     <span>{region}</span>
                   </label>
                 );

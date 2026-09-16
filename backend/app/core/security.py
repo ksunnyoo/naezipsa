@@ -137,6 +137,9 @@ def decode_token(token: str) -> dict:
     except jwt.InvalidTokenError:
         raise _unauthorized("유효하지 않은 토큰입니다.")
 
+    if not isinstance(algorithm, str):
+        raise _unauthorized("유효하지 않은 토큰입니다.")
+
     try:
         if algorithm == _ALGORITHM:
             if not SUPABASE_JWT_SECRET:
@@ -150,6 +153,9 @@ def decode_token(token: str) -> dict:
                 SUPABASE_JWT_SECRET,
                 algorithms=[_ALGORITHM],
                 audience=_EXPECTED_AUDIENCE,
+                # 발급 서버와 시계가 달라도 로그인 직후 iat 때문에 거절하지 않는다.
+                # 만료(exp), 사용 시작(nbf), 대상(aud), 서명 검증은 유지한다.
+                options={"verify_iat": False},
             )
         elif algorithm in _ASYMMETRIC_ALGORITHMS:
             if _jwks_client is None:
@@ -165,6 +171,8 @@ def decode_token(token: str) -> dict:
                 signing_key.key,
                 algorithms=[algorithm],
                 audience=_EXPECTED_AUDIENCE,
+                # HS256과 동일하게 iat 검증만 제외한다.
+                options={"verify_iat": False},
             )
         else:
             # "none"을 비롯해 우리가 쓰지 않는 알고리즘. 검증 시도조차 하지 않는다.

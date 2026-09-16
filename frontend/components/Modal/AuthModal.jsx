@@ -19,14 +19,26 @@ function translateSupabaseAuthError(err) {
     return "이미 가입된 이메일입니다.";
   }
   if (message.includes("Email not confirmed")) {
-    return "이메일 인증이 필요합니다. 받은 메일함을 확인해 주세요.";
+    return "인증해야 사용할 수 있는 이메일입니다. 받은 메일함의 인증 링크를 눌러 주세요.";
   }
   if (message.includes("Password should be at least")) {
     return "비밀번호가 너무 짧습니다.";
   }
+  if (message.includes("you can only request this after")) {
+    return "잠시 후 다시 요청해 주세요.";
+  }
+  if (message.toLowerCase().includes("email rate limit exceeded")) {
+    return "인증 메일 발송 한도를 넘었어요. 잠시 후 다시 시도해 주세요.";
+  }
   return message
     ? `요청을 처리하지 못했습니다. (${message})`
     : "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.";
+}
+
+// Supabase Auth의 Confirm email이 켜져 있을 때, 인증 링크를 누르지 않은 계정의
+// 로그인 시도는 이 오류로 온다.
+function isEmailNotConfirmed(err) {
+  return err?.code === "email_not_confirmed" || (err?.message || "").includes("Email not confirmed");
 }
 
 const SIGNUP_AGREEMENTS = [
@@ -40,6 +52,7 @@ const SIGNUP_AGREEMENTS = [
 // Set a flag to true to restore the flow later in one place.
 const FEATURE_FLAGS = {
   login: true,
+  kakaoLogin: false, // 이메일 제공 권한 준비 전까지 카카오 로그인 보류.
   accountRecovery: false,
   signupTerms: false,
   signupPhone: false,
@@ -70,6 +83,11 @@ export default function AuthModal({ open, onClose, onSignupComplete }) {
   const [usernameCheckMessage, setUsernameCheckMessage] = useState("");
   const [signupError, setSignupError] = useState("");
   const [signupSubmitting, setSignupSubmitting] = useState(false);
+  // 인증 메일을 보낸 가입 이메일(가입 직후 안내 화면)과, 인증 전이라 로그인에
+  // 실패한 이메일(로그인 화면의 재발송 버튼). 재발송 진행 상태는 둘이 공유한다.
+  const [pendingVerificationEmail, setPendingVerificationEmail] = useState("");
+  const [unconfirmedEmail, setUnconfirmedEmail] = useState("");
+  const [resendStatus, setResendStatus] = useState({ state: "idle", message: "" });
   const [verificationCode, setVerificationCode] = useState("");
   const [showVerificationInput, setShowVerificationInput] = useState(false);
   const [recoveryType, setRecoveryType] = useState(null);
@@ -158,6 +176,9 @@ export default function AuthModal({ open, onClose, onSignupComplete }) {
     setUsernameCheckMessage("");
     setSignupError("");
     setSignupSubmitting(false);
+    setPendingVerificationEmail("");
+    setUnconfirmedEmail("");
+    setResendStatus({ state: "idle", message: "" });
     setVerificationCode("");
     setShowVerificationInput(false);
     resetRecoveryState();
@@ -301,6 +322,9 @@ export default function AuthModal({ open, onClose, onSignupComplete }) {
 
     if (authError) {
       setError(translateSupabaseAuthError(authError));
+      // 인증 전 이메일이면 같은 자리에서 인증 메일을 다시 받을 수 있게 한다.
+      setUnconfirmedEmail(isEmailNotConfirmed(authError) ? email : "");
+      setResendStatus({ state: "idle", message: "" });
       return;
     }
 
@@ -309,6 +333,7 @@ export default function AuthModal({ open, onClose, onSignupComplete }) {
   }
 
   async function handleOAuthLogin(provider) {
+    if (provider === "kakao" && !FEATURE_FLAGS.kakaoLogin) return;
     setError("");
     const { error: authError } = await supabase.auth.signInWithOAuth({
       provider,
@@ -324,6 +349,28 @@ export default function AuthModal({ open, onClose, onSignupComplete }) {
     // 정상적인 경우 Supabase가 제공자 로그인 페이지로 이동시키므로, 이 모달은
     // 돌아온 뒤 onAuthStateChange 리스너(NaejipsaApp)가 세션을 인식하면서
     // 자연스럽게 닫힌 상태로 이어진다.
+  }
+
+  // 인증 링크를 누르면 돌아올 앱 주소. Supabase SDK가 돌아온 URL의 토큰으로 세션을
+  // 만들고, NaejipsaApp의 onAuthStateChange가 로그인 상태로 바꾼다.
+  // (Supabase 대시보드 Authentication -> URL Configuration의 Redirect URLs에 이 주소가 있어야 한다.)
+  function verificationRedirectTo() {
+    return typeof window !== "undefined" ? window.location.origin : undefined;
+  }
+
+  async function handleResendVerification(email) {
+    if (!email || resendStatus.state === "sending") return;
+    setResendStatus({ state: "sending", message: "" });
+    const { error: resendError } = await supabase.auth.resend({
+      type: "signup",
+      email,
+      options: { emailRedirectTo: verificationRedirectTo() },
+    });
+    setResendStatus(
+      resendError
+        ? { state: "error", message: translateSupabaseAuthError(resendError) }
+        : { state: "sent", message: "인증 메일을 다시 보냈어요. 받은 메일함을 확인해 주세요." },
+    );
   }
 
   function handleAgreementToggle(key) {
@@ -365,19 +412,38 @@ export default function AuthModal({ open, onClose, onSignupComplete }) {
 
     setSignupError("");
     setSignupSubmitting(true);
-    const { error: authError } = await supabase.auth.signUp({
-      email: signupData.username.trim(),
+    const email = signupData.username.trim();
+    const { data, error: authError } = await supabase.auth.signUp({
+      email,
       password: signupData.password,
+      options: { emailRedirectTo: verificationRedirectTo() },
     });
     setSignupSubmitting(false);
 
+    // Confirm email이 켜져 있으면 이미 가입된 이메일에도 오류 대신 identities가 빈
+    // 사용자로 성공처럼 응답한다(가입 여부 노출 방지). 꺼져 있으면 오류로 온다.
+    const alreadyRegistered =
+      Boolean(authError?.message?.includes("already registered")) ||
+      (!authError && data?.user?.identities?.length === 0);
+
+    if (alreadyRegistered) {
+      // 오류 문구가 비밀번호 단계에만 보이므로, 이메일 단계로 돌아가 그 자리에 보여준다.
+      setSignupStep(0);
+      setUsernameCheckStatus("error");
+      setUsernameCheckMessage("이미 가입된 이메일입니다.");
+      return;
+    }
+
     if (authError) {
       setSignupError(translateSupabaseAuthError(authError));
-      if (authError.message?.includes("already registered")) {
-        setSignupStep(0);
-        setUsernameCheckStatus("idle");
-        setUsernameCheckMessage("");
-      }
+      return;
+    }
+
+    // 세션이 없으면 인증 메일이 발송된 상태다. 링크를 눌러야 로그인할 수 있다.
+    if (!data?.session) {
+      setPendingVerificationEmail(email);
+      setResendStatus({ state: "idle", message: "" });
+      setScreen("signup-verify");
       return;
     }
 
@@ -779,15 +845,17 @@ export default function AuthModal({ open, onClose, onSignupComplete }) {
               <GoogleIcon />
               <span className="sns-btn-label">구글 계정으로 로그인하기</span>
             </button>
-            <button
-              type="button"
-              className="sns-btn sns-kakao"
-              disabled={loginSubmitting}
-              onClick={() => handleOAuthLogin("kakao")}
-            >
-              <KakaoIcon />
-              <span className="sns-btn-label">카카오 계정으로 로그인하기</span>
-            </button>
+            {FEATURE_FLAGS.kakaoLogin && (
+              <button
+                type="button"
+                className="sns-btn sns-kakao"
+                disabled={loginSubmitting}
+                onClick={() => handleOAuthLogin("kakao")}
+              >
+                <KakaoIcon />
+                <span className="sns-btn-label">카카오 계정으로 로그인하기</span>
+              </button>
+            )}
           </div>
 
           <div className="auth-divider">
@@ -827,6 +895,27 @@ export default function AuthModal({ open, onClose, onSignupComplete }) {
         {error && (
           <p className="auth-error" role="alert">
             {error}
+          </p>
+        )}
+
+        {error && unconfirmedEmail && (
+          <div className="auth-service-links">
+            <button
+              type="button"
+              className="auth-text-link"
+              disabled={resendStatus.state === "sending"}
+              onClick={() => handleResendVerification(unconfirmedEmail)}
+            >
+              {resendStatus.state === "sending" ? "보내는 중..." : "인증 메일 다시 보내기"}
+            </button>
+          </div>
+        )}
+        {error && unconfirmedEmail && resendStatus.message && (
+          <p
+            className={resendStatus.state === "error" ? "auth-error" : "username-check-message is-success"}
+            role="status"
+          >
+            {resendStatus.message}
           </p>
         )}
 
@@ -935,6 +1024,48 @@ export default function AuthModal({ open, onClose, onSignupComplete }) {
             다음
           </button>
         )}
+      </div>
+    );
+  }
+
+  function renderSignupVerifyScreen() {
+    return (
+      <div className="auth-signup-flow">
+        <h2 className="auth-signup-title">인증 메일을 보냈어요</h2>
+        <p>
+          <strong>{pendingVerificationEmail}</strong>로 보낸 메일의 인증 링크를 누르면
+          가입이 완료되고 바로 로그인돼요.
+        </p>
+        <p>메일이 보이지 않으면 스팸함도 확인해 주세요.</p>
+        {resendStatus.message && (
+          <p
+            className={resendStatus.state === "error" ? "auth-error" : "username-check-message is-success"}
+            role="status"
+          >
+            {resendStatus.message}
+          </p>
+        )}
+        <button
+          type="button"
+          className="auth-submit-btn"
+          disabled={resendStatus.state === "sending"}
+          onClick={() => handleResendVerification(pendingVerificationEmail)}
+        >
+          {resendStatus.state === "sending" ? "보내는 중..." : "인증 메일 다시 보내기"}
+        </button>
+        <div className="auth-service-links">
+          <button
+            type="button"
+            className="auth-text-link"
+            onClick={() => {
+              const email = pendingVerificationEmail;
+              resetAuthState();
+              setUsername(email);
+            }}
+          >
+            로그인 화면으로
+          </button>
+        </div>
       </div>
     );
   }
@@ -1204,7 +1335,7 @@ export default function AuthModal({ open, onClose, onSignupComplete }) {
   const modalTitle =
     screen === "login"
       ? "로그인"
-      : screen === "signup" || screen === "signup-form"
+      : screen === "signup" || screen === "signup-form" || screen === "signup-verify"
         ? "회원가입"
         : null;
 
@@ -1244,6 +1375,7 @@ export default function AuthModal({ open, onClose, onSignupComplete }) {
               ? renderSignupConsentScreen()
               : renderSignupFormScreen())}
           {screen === "signup-form" && renderSignupFormScreen()}
+          {screen === "signup-verify" && renderSignupVerifyScreen()}
           {FEATURE_FLAGS.accountRecovery &&
             (screen === "find-id" || screen === "find-password") &&
             renderRecoveryScreen()}

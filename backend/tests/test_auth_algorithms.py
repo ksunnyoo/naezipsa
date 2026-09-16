@@ -1,4 +1,4 @@
-"""JWT 서명 알고리즘 분기 테스트 (HS256 / ES256 / 허용하지 않는 것).
+"""JWT 서명 알고리즘 분기 테스트 (HS256 / ES256 / RS256 / 허용하지 않는 것).
 
 app/core/security.py의 decode_token은 토큰 헤더의 alg를 보고 검증 방식을 고른다.
 그 alg는 서명을 확인하기 전 값이라 공격자가 마음대로 적을 수 있으므로,
@@ -9,11 +9,13 @@ app/core/security.py의 decode_token은 토큰 헤더의 alg를 보고 검증 �
 """
 import base64
 import json
+import time
 import uuid
 
 import jwt
 import pytest
-from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.asymmetric import ec, rsa
+from fastapi import HTTPException
 
 from app.core import security
 from tests.conftest import PROFILE_URL
@@ -63,6 +65,27 @@ def es256_keypair():
     return private_key, private_key.public_key()
 
 
+@pytest.fixture(params=["HS256", "ES256", "RS256"])
+def sign_token(request, monkeypatch):
+    """실제 서명은 검증하되 테스트 키만 쓰고 JWKS 네트워크는 사용하지 않는다."""
+    algorithm = request.param
+    if algorithm == "HS256":
+        key = "phase1-test-jwt-secret-at-least-32-bytes"
+        monkeypatch.setattr(security, "SUPABASE_JWT_SECRET", key)
+    else:
+        key = (
+            ec.generate_private_key(ec.SECP256R1())
+            if algorithm == "ES256"
+            else rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        )
+        monkeypatch.setattr(security, "_jwks_client", _FakeJWKSClient(key.public_key()))
+
+    def encode(payload):
+        return jwt.encode(payload, key, algorithm=algorithm, headers={"kid": "test-key"})
+
+    return encode
+
+
 # --- 허용하지 않는 알고리즘은 401 -------------------------------------------
 
 @pytest.mark.parametrize(
@@ -103,6 +126,62 @@ def test_none_algorithm_never_reaches_jwks(client, monkeypatch, es256_keypair):
 
     assert res.status_code == 401
     assert fake.calls == 0, "허용하지 않는 alg인데 JWKS를 조회했다"
+
+
+@pytest.mark.parametrize("algorithm", [[], {}], ids=["array", "object"])
+def test_non_string_algorithm_is_401_before_jwks(client, monkeypatch, algorithm):
+    """조작한 alg 자료형은 서버 오류 대신 기존 401 오류 형식으로 거절한다."""
+    fake = _FakeJWKSClient(None)
+    monkeypatch.setattr(security, "_jwks_client", fake)
+    token = _unsigned_token({"alg": algorithm, "kid": "test-key"}, _payload())
+
+    res = client.get(PROFILE_URL, headers={"Authorization": f"Bearer {token}"})
+
+    assert res.status_code == 401, res.text
+    assert res.json()["error"]["code"] == "UNAUTHORIZED"
+    assert res.headers["WWW-Authenticate"] == "Bearer"
+    assert fake.calls == 0
+
+
+# --- 재로그인 직후 발급 시각 차이와 기존 검증 유지 ----------------------------
+
+def test_future_iat_is_accepted(sign_token):
+    """Supabase 시계가 서버보다 앞서도 방금 발급받은 정상 토큰은 허용한다."""
+    payload = _payload() | {"iat": int(time.time()) + 60}
+
+    assert security.decode_token(sign_token(payload)) == payload
+
+
+@pytest.mark.parametrize(
+    "invalid_claim",
+    [
+        pytest.param({"exp": 1_000_000_000}, id="expired"),
+        pytest.param({"nbf": 9_999_999_999}, id="not-yet-valid"),
+        pytest.param({"aud": "another-service"}, id="wrong-audience"),
+    ],
+)
+def test_future_iat_keeps_other_claim_validation(sign_token, invalid_claim):
+    """iat 검증을 끄더라도 exp/nbf/aud가 잘못된 토큰은 계속 거절한다."""
+    payload = _payload() | {"iat": int(time.time()) + 60} | invalid_claim
+
+    with pytest.raises(HTTPException) as exc:
+        security.decode_token(sign_token(payload))
+
+    assert exc.value.status_code == 401
+    assert exc.value.headers == {"WWW-Authenticate": "Bearer"}
+
+
+def test_future_iat_keeps_signature_validation(sign_token):
+    """새 토큰의 사용자 ID를 서명 변경 없이 바꿔도 원본 소유자로 인증되지 않는다."""
+    payload = _payload() | {"iat": int(time.time()) + 60}
+    header, _, signature = sign_token(payload).split(".")
+    tampered = _b64url(payload | {"sub": str(uuid.uuid4())})
+
+    with pytest.raises(HTTPException) as exc:
+        security.decode_token(f"{header}.{tampered}.{signature}")
+
+    assert exc.value.status_code == 401
+    assert exc.value.headers == {"WWW-Authenticate": "Bearer"}
 
 
 # --- ES256(비대칭키) 정상 경로 ----------------------------------------------
@@ -183,6 +262,7 @@ def test_hs256_still_uses_secret_not_jwks(monkeypatch, es256_keypair):
     _, public_key = es256_keypair
     fake = _FakeJWKSClient(public_key)
     monkeypatch.setattr(security, "_jwks_client", fake)
+    monkeypatch.setattr(security, "SUPABASE_JWT_SECRET", "phase1-test-jwt-secret-at-least-32-bytes")
 
     token = jwt.encode(_payload(), "attacker-chosen-secret", algorithm="HS256")
 

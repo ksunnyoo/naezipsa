@@ -69,8 +69,8 @@ export const REGULATIONS = {
 // 자리표시자).
 export const MAX_DASHBOARD_ITEMS = 6;
 
-// 저장 가능한 그룹 수 상한. 백엔드 app/dashboard/model.py의
-// MAX_DASHBOARD_GROUPS와 값을 맞춰둔다(한 줄 4개 x 2줄).
+// 만들 수 있는 그룹 수 상한. 백엔드 app/group/model.py의
+// MAX_GROUPS_PER_USER와 값을 맞춰둔다(한 줄 4개 x 2줄).
 export const MAX_DASHBOARD_GROUPS = 8;
 
 // 검색 결과가 실 백엔드 API에서 온 경우 dealCount(평형 종류 수)가 아직 없을

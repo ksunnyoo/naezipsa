@@ -618,12 +618,12 @@ function DetailStep({
 
             <div className="field-block">
               <div className="field-block-label">향</div>
-              <ChipGroup options={DIRECTIONS} value={direction} onChange={onDirectionChange} />
+              <ChipGroup name="direction" options={DIRECTIONS} value={direction} onChange={onDirectionChange} />
             </div>
 
             <div className="field-block">
               <div className="field-block-label">인테리어</div>
-              <ChipGroup options={INTERIORS} value={interior} onChange={onInteriorChange} />
+              <ChipGroup name="interior" options={INTERIORS} value={interior} onChange={onInteriorChange} />
             </div>
           </div>
         </div>

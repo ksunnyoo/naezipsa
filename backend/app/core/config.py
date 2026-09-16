@@ -59,6 +59,19 @@ SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET", "")
 # SUPABASE_URL/KEY(REST API용)와는 별개의 값이니 혼동하지 말 것.
 DATABASE_URL = os.getenv("DATABASE_URL", "")
 
+# Alembic 마이그레이션 전용 연결 문자열(선택). 비어 있으면 DATABASE_URL을 쓴다.
+# 앱은 트랜잭션 풀러(6543)로 붙고, DDL을 실행하는 마이그레이션은 세션 풀러(5432)나
+# 직접 연결을 쓰는 것이 Supabase 권장이라 분리했다.
+MIGRATION_DATABASE_URL = os.getenv("MIGRATION_DATABASE_URL", "")
+
+# 앱 DB 연결 풀(프로세스당). 기본값은 여러 명이 로컬 서버를 함께 띄우는 개발 환경 기준.
+# 요청 하나가 DB를 쓰는 동안 연결 하나를 쥐므로, 서버 프로세스 하나가 동시에 처리하는
+# DB 요청 수는 DB_POOL_SIZE + DB_MAX_OVERFLOW를 넘지 못한다. 배포 시 부하에 맞춰 늘린다.
+# 값이 비어 있어도(.env.example을 그대로 복사한 경우) 기본값을 쓴다.
+DB_POOL_SIZE = int(os.getenv("DB_POOL_SIZE") or 3)
+DB_MAX_OVERFLOW = int(os.getenv("DB_MAX_OVERFLOW") or 2)
+DB_POOL_TIMEOUT = int(os.getenv("DB_POOL_TIMEOUT") or 10)  # 연결을 기다리는 최대 초
+
 # 필수 키가 비어있으면 앱 시작 시점에 바로 알 수 있도록 경고
 _required = {
     "MOLIT_API_KEY": MOLIT_API_KEY,

@@ -7,7 +7,7 @@ import pytest
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, event, select, func, insert
+from sqlalchemy import JSON, MetaData, create_engine, event, select, func, insert
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -18,6 +18,7 @@ from app.inspection.model import PropertyInspection
 from app.inspection.schema import InspectionCreate
 from app.main import app
 from app.property.model import ComplexMaster, SizeMaster
+from app.user.model import Profile
 
 URL = '/api/v1/properties'
 OWNER = uuid.uuid4()
@@ -32,6 +33,10 @@ def inspection_env(tmp_path):
         conn.execute('PRAGMA foreign_keys=ON')
     for table in (DashboardItem.__table__, ComplexMaster.__table__, SizeMaster.__table__):
         table.create(engine)
+    # 후보 삭제는 profiles 행을 잠근다. 이용 목적 컬럼(PostgreSQL 배열)만 JSON으로 바꿔 만든다.
+    profiles_table = Profile.__table__.to_metadata(MetaData())
+    profiles_table.c.service_purposes.type = JSON()
+    profiles_table.create(engine)
     # ORM create_all 대신 실제 신규 마이그레이션으로 테이블을 생성한다.
     spec = importlib.util.spec_from_file_location('inspection_migration', 'alembic/versions/20260913_1500_c71f9a2d830e_create_property_inspections.py')
     migration = importlib.util.module_from_spec(spec)

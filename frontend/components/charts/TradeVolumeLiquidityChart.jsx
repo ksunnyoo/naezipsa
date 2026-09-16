@@ -218,7 +218,7 @@ export default function TradeVolumeLiquidityChart({ items }) {
                   axisLine={false}
                   tickLine={false}
                   tickMargin={8}
-                  tick={{ fontSize: 11, fill: "var(--color-text-muted)" }}
+                  tick={{ fontSize: 11, fill: "#6b7280", fontWeight: 500 }}
                 />
                 <Tooltip
                   cursor={{ fill: "rgba(17,17,17,0.03)" }}

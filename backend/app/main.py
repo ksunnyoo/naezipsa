@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.errors import register_exception_handlers
 from app.dashboard import router as dashboard_router
+from app.group import router as group_router
 from app.insight import router as insight_router
 from app.inspection import router as inspection_router
 from app.news import router as news_router
@@ -47,6 +48,8 @@ app.include_router(subscription_router, prefix="/api/v1")
 # A 담당: 프로필/후보매물/대시보드 (로그인 필요)
 app.include_router(user_router.router, prefix="/api/v1")
 app.include_router(dashboard_router.router, prefix="/api/v1")
+app.include_router(group_router.router, prefix="/api/v1")
+app.include_router(group_router.shared_router, prefix="/api/v1")  # 그룹 공유 링크 열람 (로그인 불필요)
 app.include_router(insight_router.router, prefix="/api/v1")
 app.include_router(inspection_router.router, prefix="/api/v1")
 

@@ -13,7 +13,7 @@ Supabase는 "호스팅된 PostgreSQL"일 뿐이고, 실제 데이터 적재·조
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, declarative_base, sessionmaker
 
-from app.core.config import DATABASE_URL
+from app.core.config import DATABASE_URL, DB_MAX_OVERFLOW, DB_POOL_SIZE, DB_POOL_TIMEOUT
 
 
 # Alembic이 관리하는 테이블(회원·후보매물)이 공유하는 선언적 Base.
@@ -39,7 +39,21 @@ def get_engine():
                 ".env에 DATABASE_URL을 먼저 채워넣으세요. "
                 "Supabase 대시보드 -> Project Settings -> Database -> Connection string(URI)에서 확인."
             )
-        _engine = create_engine(DATABASE_URL, pool_pre_ping=True)
+        # 공용 Supabase를 팀원 여러 명의 로컬 서버·스크립트가 함께 쓴다.
+        # SQLAlchemy 기본 풀(최대 15개)이면 세션 풀러(5432)의 연결 한도 15를 서버
+        # 프로세스 하나가 혼자 채울 수 있어, 2026-09-14에 팀 전체 DB 기능이 500으로
+        # 멈췄다. 앱은 트랜잭션 풀러(6543)로 붙고(.env.example 참고), 프로세스당
+        # 연결 수를 묶는다(기본 최대 5개, config.py의 DB_POOL_* 환경변수로 조정).
+        # pool_timeout을 넘기면 오래 매달리지 않고 실패한다. pool_recycle은 풀러가
+        # 끊은 유휴 연결을 재사용하지 않게 한다.
+        _engine = create_engine(
+            DATABASE_URL,
+            pool_pre_ping=True,
+            pool_size=DB_POOL_SIZE,
+            max_overflow=DB_MAX_OVERFLOW,
+            pool_timeout=DB_POOL_TIMEOUT,
+            pool_recycle=300,
+        )
     return _engine
 
 

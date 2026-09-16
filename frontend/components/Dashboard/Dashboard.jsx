@@ -9,28 +9,29 @@ import InsightPanel from "../Insight/InsightPanel";
 // translateX(-50%)) - 헤더의 상세 데이터/인사이트 메뉴와 짝을 이룬다.
 export default function Dashboard({
   items,
+  totalCount,
+  insightItems,
+  userId,
+  profile,
   onToggle,
   onEdit,
   onRemove,
   onReorder,
   onAdd,
   activeContentTab,
-  activeGroupName,
-  onSaveActiveGroup,
-  onRenameActiveGroup,
+  dragDisabled,
 }) {
   return (
     <div className="dashboard" data-component="Dashboard">
       <DashboardList
         items={items}
+        totalCount={totalCount}
         onToggle={onToggle}
         onEdit={onEdit}
         onRemove={onRemove}
         onReorder={onReorder}
         onAdd={onAdd}
-        activeGroupName={activeGroupName}
-        onSaveActiveGroup={onSaveActiveGroup}
-        onRenameActiveGroup={onRenameActiveGroup}
+        dragDisabled={dragDisabled}
       />
       <div className="content-track-viewport">
         <div
@@ -42,7 +43,13 @@ export default function Dashboard({
             <DashboardCharts items={items} />
           </div>
           <div className="content-panel content-panel--insight">
-            <InsightPanel referenceSizeId={items[0]?.sizeId} refreshKey={JSON.stringify(items.map(item => [item.id, item.sizeId]))} />
+            <InsightPanel
+              items={insightItems}
+              userId={userId}
+              profile={profile}
+              referenceSizeId={items[0]?.sizeId}
+              refreshKey={JSON.stringify(items.map(item => [item.id, item.sizeId]))}
+            />
           </div>
         </div>
       </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowUpIcon } from "../icons";
-import DocumentLinkSection from "./DocumentLinkSection";
+// import DocumentLinkSection from "./DocumentLinkSection"; // 추후 구현 예정이라 주석 처리(2026-09)
 
 // <MainHeroOverlay cleared /> : 블러 처리된 오버레이 레이어. cleared=true가
 // 되면 위로 슬라이드되며 사라진다(.hero-overlay.is-cleared, globals.css).
@@ -46,8 +46,9 @@ export default function MainHeroOverlay({ cleared, showCloseBtn, onClose, onCtaC
           관심 매물 추가하기
         </button>
 
-        <div className="doc-section-label">부동산 문서 출력하러 가기</div>
-        <DocumentLinkSection />
+        {/* 부동산 문서 출력 기능은 추후 구현 예정이라 우선 주석 처리(2026-09) */}
+        {/* <div className="doc-section-label">부동산 문서 출력하러 가기</div>
+        <DocumentLinkSection /> */}
       </div>
     </div>
   );

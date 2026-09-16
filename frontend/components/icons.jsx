@@ -264,24 +264,37 @@ export function GearIcon() {
 }
 
 export function GroupSaveIcon() {
+  // 탭이 달린 폴더 한 장 - 왼쪽 위 작은 탭(4,6.5~9,6.5)에서 대각선으로
+  // 본체 윗변(10.5,8)에 이어붙인 뒤 사각형을 그리는 단일 닫힌 path.
+  // 다른 아이콘들처럼 각 모서리는 strokeLinejoin="round"로만 둥글리고
+  // 별도 호(arc) 명령은 쓰지 않는다.
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
       <path
-        d="M5 4.5h11l3 3V19a.5.5 0 0 1-.5.5h-13a.5.5 0 0 1-.5-.5v-14a.5.5 0 0 1 .5-.5Z"
+        d="M4 6.5H9L10.5 8H20V19H4Z"
         stroke="var(--color-ink)"
         strokeWidth="1.7"
         strokeLinejoin="round"
-      />
-      <path
-        d="M8 4.5V9h6V4.5M8.5 13h7"
-        stroke="var(--color-ink)"
-        strokeWidth="1.7"
-        strokeLinecap="round"
       />
     </svg>
   );
 }
 
+// 마이페이지 - 원형 머리와 아래가 평평한 반원형 몸통. 공유·그룹 아이콘과 같은
+// 18px·선 두께 1.7로 맞춘다.
+export function ProfileIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+      <circle cx="12" cy="7.5" r="4" stroke="var(--color-ink)" strokeWidth="1.7" />
+      <path
+        d="M4.5 21V18.5A7.5 7.5 0 0 1 19.5 18.5V21Z"
+        stroke="var(--color-ink)"
+        strokeWidth="1.7"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
 export function ShareIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
@@ -333,6 +346,62 @@ export function DocumentIcon() {
         stroke="var(--color-text-secondary)"
         strokeWidth="1.4"
         strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+// 매물 수정 팝업 우측 상단 "체크리스트 작성" 버튼용 클립보드+체크 아이콘.
+export function ChecklistIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+      <path
+        d="M5.5 6.5A1.5 1.5 0 0 1 7 5H17A1.5 1.5 0 0 1 18.5 6.5V19.5A1.5 1.5 0 0 1 17 21H7A1.5 1.5 0 0 1 5.5 19.5Z"
+        stroke="var(--color-ink)"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+      />
+      <path d="M9 4.5H15V7H9Z" stroke="var(--color-ink)" strokeWidth="1.6" strokeLinejoin="round" />
+      <path
+        d="M8 12.2 10 14.2 14.5 9.7"
+        stroke="var(--color-ink)"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path d="M8.5 17.5H15.5" stroke="var(--color-ink)" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+// 체크리스트 선택 항목(InspectionChecklist)용 체크 표시 - 원형 껍데기 없이
+// 체크 모양 하나만. 선택 안 됐을 때는 회색(라벨 텍스트와 같은 톤),
+// 선택되면 프라이머리 그린으로 바뀐다.
+export function ChecklistCheckIcon({ checked }) {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+      <path
+        d="M5.5 12.5 9.5 16.5 18.5 7"
+        stroke={checked ? "var(--color-primary)" : "var(--color-text-faint)"}
+        strokeWidth="2.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+// 체크리스트 그룹 아코디언 토글용 아래 화살표 - 기본(펼침)은 아래를
+// 가리키고, CSS에서 .is-collapsed일 때 180deg 회전시켜 위를 가리키게 한다.
+export function ChevronIcon({ className }) {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className={className}>
+      <path
+        d="M6 9l6 6 6-6"
+        stroke="var(--color-text-secondary)"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
       />
     </svg>
   );

@@ -20,7 +20,7 @@ from sqlalchemy import engine_from_config, pool
 from alembic import context
 
 # app 패키지를 import 할 수 있도록 (alembic.ini의 prepend_sys_path = . 와 함께 동작)
-from app.core.config import DATABASE_URL
+from app.core.config import DATABASE_URL, MIGRATION_DATABASE_URL
 from app.core.database import Base
 
 # ⚠️ 모델 모듈을 import해야 테이블이 Base.metadata에 등록된다.
@@ -36,14 +36,17 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# 접속 주소는 alembic.ini가 아니라 .env의 DATABASE_URL에서 가져온다.
-if not DATABASE_URL:
+# 접속 주소는 alembic.ini가 아니라 .env에서 가져온다.
+# MIGRATION_DATABASE_URL(세션 풀러 5432 또는 직접 연결)이 있으면 그것을, 없으면
+# DATABASE_URL을 쓴다. 앱이 쓰는 트랜잭션 풀러(6543)는 DDL 실행에 권장되지 않는다.
+_migration_url = MIGRATION_DATABASE_URL or DATABASE_URL
+if not _migration_url:
     raise RuntimeError(
-        ".env에 DATABASE_URL이 없습니다. Alembic은 이 값 없이는 실행할 수 없습니다.\n"
+        ".env에 MIGRATION_DATABASE_URL 또는 DATABASE_URL이 없습니다. Alembic은 이 값 없이는 실행할 수 없습니다.\n"
         "Supabase 대시보드 -> Project Settings -> Database -> Connection string(URI)에서 확인하세요."
     )
 # ini 파일 문법상 '%'는 특수문자라 비밀번호에 %가 있으면 깨진다. 이스케이프 처리.
-config.set_main_option("sqlalchemy.url", DATABASE_URL.replace("%", "%%"))
+config.set_main_option("sqlalchemy.url", _migration_url.replace("%", "%%"))
 
 # A가 관리하는 테이블만 담긴 metadata. 여기 없는 테이블은 Alembic이 건드리지 않는다.
 target_metadata = Base.metadata
@@ -63,6 +66,7 @@ HAND_MANAGED_CONSTRAINTS = {
     "fk_profiles_auth_users",       # profiles.id -> auth.users.id
     "fk_dashboard_items_user",      # dashboard_items.user_id -> profiles.id
     "fk_dashboard_items_size",      # dashboard_items.size_id -> size_master.id (B 데이터 이관 후 추가 예정)
+    "fk_groups_owner",              # groups.owner_user_id -> profiles.id
 }
 
 

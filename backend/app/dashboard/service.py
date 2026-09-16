@@ -23,7 +23,7 @@ B가 `ingest/compute_metrics.py`로 미리 계산해 둔 item_metrics_cache를 �
 ⚠️ B의 코드는 읽기만 하고 수정하지 않는다(팀 규칙 1).
    지표 계산 기준을 바꿔야 하면 B에게 요청한다.
 """
-from sqlalchemy import delete, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.dashboard.model import DashboardItem
@@ -36,6 +36,10 @@ from app.dashboard.schema import (
 from app.property.model import ComplexMaster, ItemMetricsCache, RegulationZone, SizeMaster
 from app.property.service import to_won
 
+# 내 후보를 읽는 순서. 사용자가 저장한 순서(sort_order)가 먼저고, 같으면 등록순·id순이다.
+# 후보 목록·대시보드·그룹 상세·공유 스냅샷·순서 저장이 모두 이 순서를 쓴다.
+ITEM_ORDER = (DashboardItem.sort_order, DashboardItem.created_at, DashboardItem.id)
+
 
 def get_items_with_metrics(db: Session, user_id) -> list[DashboardItemWithMetrics]:
     """내 후보 목록에 단지명·평형·시세 지표를 붙여서 돌려준다.
@@ -45,6 +49,7 @@ def get_items_with_metrics(db: Session, user_id) -> list[DashboardItemWithMetric
     프론트는 "지표 준비 중"으로 표시하면 된다.
 
     size_master는 외래키가 걸려 있어 항상 존재하지만, 방어적으로 outerjoin을 쓴다.
+    순서는 ITEM_ORDER(저장한 순서 → 등록순)다.
     """
     rows = db.execute(
         select(DashboardItem, SizeMaster, ComplexMaster, ItemMetricsCache, RegulationZone)
@@ -57,7 +62,7 @@ def get_items_with_metrics(db: Session, user_id) -> list[DashboardItemWithMetric
         # 동일한 규칙).
         .outerjoin(RegulationZone, RegulationZone.sgg_cd == ComplexMaster.sgg_cd)
         .where(DashboardItem.user_id == user_id)
-        .order_by(DashboardItem.created_at)
+        .order_by(*ITEM_ORDER)
     ).all()
 
     return [
@@ -97,6 +102,8 @@ def _build(item, size, complex_, cache, zone=None) -> DashboardItemWithMetrics:
         direction=item.direction,
         interior_state=item.interior_state,
         memo=item.memo,
+        checked=item.checked,
+        sort_order=item.sort_order,
         created_at=item.created_at,
         updated_at=item.updated_at,
         # 단지·평형 정보 (B의 master 테이블)
@@ -127,23 +134,20 @@ def size_exists(db: Session, size_id: int) -> bool:
     return db.get(SizeMaster, size_id) is not None
 
 
-# --- 그룹 저장/불러오기, 공유가 공통으로 쓰는 스냅샷 헬퍼 -------------------
+# --- 공유 링크가 쓰는 스냅샷 헬퍼 -----------------------------------------
 #
-# 그룹 저장과 공유 링크 생성은 둘 다 "지금 내 관심 매물을 통째로 떠서 어딘가에
-# 담아두는" 동작이라 스냅샷을 뜨는 함수(snapshot_current_items)를 공유한다.
-# 미리보기(그룹 목록을 열어보거나 공유 링크를 열었을 때)는 그 스냅샷에
-# 단지명·시세를 다시 붙여야 해서 enrich_snapshot_items를 함께 쓴다.
+# 공유 링크는 "지금 내 관심 매물"을 통째로 떠서 담아두고(snapshot_current_items),
+# 링크를 열면 그 스냅샷에 단지명·시세를 다시 붙여 보여준다(enrich_snapshot_items).
+# 그룹은 스냅샷이 아니라 기존 후보를 가리키는 관계다(app/group 참고).
 
 
 def snapshot_current_items(db: Session, user_id) -> list[dict]:
     """지금 dashboard_items에 있는 내 관심 매물을 JSON 스냅샷으로 뜬다.
 
-    그룹으로 저장하거나 공유 링크를 만들 때 이 스냅샷을 그대로 JSONB
-    컬럼에 저장한다. 키 이름을 DashboardItem 컬럼명과 맞춰뒀으므로
-    나중에 그룹을 불러올 때 **dict로 그대로 DashboardItem(...)에 넣을 수 있다.
+    공유 링크를 만들 때 이 스냅샷을 그대로 JSONB 컬럼에 저장한다. 순서는 저장한 순서다.
     """
     items = db.execute(
-        select(DashboardItem).where(DashboardItem.user_id == user_id)
+        select(DashboardItem).where(DashboardItem.user_id == user_id).order_by(*ITEM_ORDER)
     ).scalars().all()
     return [
         {
@@ -161,11 +165,11 @@ def snapshot_current_items(db: Session, user_id) -> list[dict]:
 
 
 def enrich_snapshot_items(db: Session, items: list[dict]) -> list[SnapshotItemWithInfo]:
-    """스냅샷 항목들(그룹/공유)에 단지명·평형·시세 지표를 붙인다.
+    """공유 스냅샷 항목에 단지명·평형·시세 지표를 붙인다.
 
     get_items_with_metrics와 같은 조인이지만 출발점이 DashboardItem 행이
     아니라 JSON 스냅샷이라, size_id 목록으로 SizeMaster부터 직접 조인한다.
-    (그룹/공유는 사용자가 삭제하지 않는 한 남아있는데, 그 사이 단지가
+    (공유 링크는 만든 뒤에도 계속 남아 있는데, 그 사이 단지가
     size_master에서 사라졌을 수도 있어 outerjoin + 딕셔너리 조회로
     "정보 없음"도 자연스럽게 처리한다.)
     """
@@ -216,20 +220,3 @@ def enrich_snapshot_items(db: Session, items: list[dict]) -> list[SnapshotItemWi
             )
         )
     return result
-
-
-def replace_dashboard_items(db: Session, user_id, items: list[dict]) -> None:
-    """user_id의 dashboard_items를 통째로 items(스냅샷)로 교체한다.
-
-    그룹 "불러오기" 전용 동작 - 기존 관심 매물은 전부 지우고 그룹에 저장된
-    항목을 새로 채운다("불러오면 지금 목록을 완전히 교체" - 팀/사용자 확정).
-    size_master에서 이미 사라진 size_id는 조용히 건너뛴다(그룹을 저장한 뒤
-    단지 데이터가 갱신되며 없어졌을 수 있고, 그대로 넣으면 FK 위반으로
-    500이 난다).
-    """
-    db.execute(delete(DashboardItem).where(DashboardItem.user_id == user_id))
-    for it in items:
-        if not size_exists(db, it["size_id"]):
-            continue
-        db.add(DashboardItem(user_id=user_id, **it))
-    db.commit()

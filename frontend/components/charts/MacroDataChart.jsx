@@ -217,7 +217,7 @@ export default function MacroDataChart() {
                   axisLine={false}
                   tickLine={false}
                   tickMargin={8}
-                  tick={{ fontSize: 11, fill: "var(--color-text-muted)" }}
+                  tick={{ fontSize: 11, fill: "#6b7280", fontWeight: 500 }}
                 />
                 <YAxis hide domain={["dataMin - 5", "dataMax + 5"]} />
                 <Tooltip

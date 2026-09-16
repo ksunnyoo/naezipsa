@@ -9,21 +9,27 @@ import { supabase } from "@/lib/supabaseClient";
 // 연결돼 있다.
 //
 // API_BASE_URL은 .env.local의 NEXT_PUBLIC_API_BASE_URL을 쓴다(로컬 기본값은
-// backend README 기준 http://localhost:8000/api/v1). NEXT_PUBLIC_ 접두어라
+// http://127.0.0.1:8000/api/v1). NEXT_PUBLIC_ 접두어라
 // 브라우저에도 노출되지만 그냥 API 주소일 뿐이라 문제 없음.
+// localhost가 아니라 127.0.0.1인 이유: Windows에서 localhost는 IPv6(::1)부터 시도하는데
+// 개발 서버(uvicorn)는 127.0.0.1에만 떠 있어, 새 연결마다 약 0.2초씩 늦어진다(2026-09-16 측정).
 //
 // 2026-09: 로그인 사용자별 관심 매물 저장(A-03~A-08, GET/POST/PATCH/DELETE
 // /dashboard/items)도 여기 연결돼 있다. 이 그룹만 로그인이 필수라
 // authHeaders()로 Supabase 세션 토큰을 Authorization 헤더에 실어 보낸다.
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000/api/v1";
+  process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000/api/v1";
 
 // 로그인 상태면 현재 Supabase 세션의 access token을 Authorization 헤더로
 // 실어 보낸다. 비로그인 상태면 빈 객체 - /dashboard 계열은 이 헤더 없이
 // 호출하면 401이 나므로, 호출 자체를 로그인 상태에서만 하도록 호출부
 // (components/NaejipsaApp.jsx)에서 user 유무로 막아둔다.
-async function authHeaders() {
+async function authHeaders(expectedUserId) {
   const { data } = await supabase.auth.getSession();
+  if (expectedUserId !== undefined &&
+      (!expectedUserId || data.session?.user?.id !== expectedUserId)) {
+    throw new Error("로그인 상태가 변경되었습니다. 다시 로그인해 주세요.");
+  }
   const token = data.session?.access_token;
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
@@ -105,6 +111,20 @@ export async function getRentTrend(sizeId, months) {
   const res = await fetch(`${API_BASE_URL}/items/${sizeId}/rent-trend?months=${months}`);
   if (!res.ok) {
     throw new Error(`get rent trend failed with status ${res.status}`);
+  }
+  return res.json();
+}
+
+// 평형(size_id)의 개별 실거래가 포인트 + 기간 내 평균가(실거래 분포도 차트 전용).
+// months는 3/12/36, type은 "sale"(매매) | "jeonse"(전세).
+// 반환 형태(백엔드 응답 그대로): { size_id, months, type, count, average_price,
+// points: [{ deal_amount, deal_year, deal_month, floor }] }
+export async function getTradePoints(sizeId, months, type) {
+  const res = await fetch(
+    `${API_BASE_URL}/items/${sizeId}/trade-points?months=${months}&type=${type}`
+  );
+  if (!res.ok) {
+    throw new Error(`get trade points failed with status ${res.status}`);
   }
   return res.json();
 }
@@ -200,93 +220,158 @@ export async function deleteDashboardItem(itemId) {
   return res.json();
 }
 
-// --- 그룹 저장/불러오기, 공유 -----------------------------------------------
-// 백엔드 app/dashboard/router.py의 /dashboard/groups, /dashboard/shares 참고.
-// 그룹은 로그인 필수(authHeaders). 공유는 "만들기"만 로그인 필수고,
+// 정렬 저장(Phase 3 보완): 내 전체 후보의 표시 순서를 한 번에 저장한다.
+// expectedItemIds는 드래그를 시작하기 전에 마지막으로 서버에서 확인한 순서다 - 다른 탭·기기에서
+// 목록이 바뀌었으면 서버가 저장하지 않고 409를 준다. userId로 요청 시점의 로그인 계정을
+// 확인한다(계정이 바뀌었으면 보내지 않는다). 실패하면 서버 안내 문구와 status를 담아 던진다.
+// 반환 형태: { item_ids: [...] }
+export async function reorderDashboardItems(itemIds, expectedItemIds, userId) {
+  const res = await fetch(`${API_BASE_URL}/dashboard/items/order`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...(await authHeaders(userId ?? null)) },
+    body: JSON.stringify({ item_ids: itemIds, expected_item_ids: expectedItemIds }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    const error = new Error(body?.error?.message || "순서를 저장하지 못했어요.");
+    error.status = res.status;
+    throw error;
+  }
+  return res.json();
+}
+
+// 기존 세션과 프로필 API를 재사용한다. 계정 전환 중 이전 화면의 쓰기는 막는다.
+async function profileResponse(res) {
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new Error(body?.error?.message || "프로필을 처리하지 못했어요. 다시 시도해 주세요.");
+  }
+  return res.json();
+}
+
+export async function getMyProfile(userId) {
+  const res = await fetch(`${API_BASE_URL}/users/me/profile`, {
+    headers: await authHeaders(userId ?? null),
+  });
+  return profileResponse(res);
+}
+
+export async function updateMyProfile(payload, userId) {
+  const res = await fetch(`${API_BASE_URL}/users/me/profile`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...(await authHeaders(userId ?? null)) },
+    body: JSON.stringify(payload),
+  });
+  return profileResponse(res);
+}
+
+export async function createDashboardInsight(itemIds, userId) {
+  // 기존 API에서 빈 목록은 전체 후보를 뜻하므로 선택이 없으면 호출하지 않는다.
+  if (!itemIds.length) throw new Error("분석할 관심 매물을 선택해 주세요.");
+  const res = await fetch(`${API_BASE_URL}/dashboard/insight`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...(await authHeaders(userId ?? null)) },
+    body: JSON.stringify({ item_ids: itemIds }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new Error(body?.error?.message || "AI 분석을 불러오지 못했어요. 다시 시도해 주세요.");
+  }
+  return res.json();
+}
+
+// --- Phase 4: 후보 그룹 -----------------------------------------------------
+// 백엔드 app/group/router.py 참고. 전부 로그인 필수(Authorization 헤더).
+// 그룹은 기존 후보를 가리키기만 하므로 어떤 호출도 후보(dashboard_items)를 지우거나
+// 새로 만들지 않는다. 실패하면 서버의 한국어 안내(error.message)를 그대로 던진다.
+const GROUP_FALLBACK_MESSAGE = "그룹을 처리하지 못했어요. 잠시 후 다시 시도해주세요.";
+
+async function groupRequest(path, { method = "GET", body } = {}) {
+  const headers = await authHeaders();
+  if (body !== undefined) headers["Content-Type"] = "application/json";
+  let res;
+  try {
+    res = await fetch(`${API_BASE_URL}/groups${path}`, {
+      method,
+      headers,
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+  } catch {
+    throw new Error(GROUP_FALLBACK_MESSAGE);
+  }
+  if (!res.ok) {
+    const data = await res.json().catch(() => null);
+    throw new Error(data?.error?.message || GROUP_FALLBACK_MESSAGE);
+  }
+  return res.json();
+}
+
+// 내 그룹 목록. 반환 형태: { groups: [{ id, name, item_count, share_link_count, created_at, updated_at }], count, max_count }
+// share_link_count는 지금 살아 있는 공유 링크 수(0이면 공유하지 않는 그룹).
+export function getGroups() {
+  return groupRequest("");
+}
+
+// 그룹 상세. 반환 형태: { id, name, item_count, item_ids: [후보 id], items: [후보 목록과 같은 모양] }
+export function getGroup(groupId) {
+  return groupRequest(`/${groupId}`);
+}
+
+// 그룹 만들기. itemIds가 비어 있으면 빈 그룹이다. 다른 그룹의 item_ids를 넘기면
+// "이 그룹으로 새 그룹 만들기"가 된다(원래 그룹은 그대로). 반환 형태는 getGroup과 같다.
+export function createGroup(name, itemIds = []) {
+  return groupRequest("", { method: "POST", body: { name, item_ids: itemIds } });
+}
+
+export function renameGroup(groupId, name) {
+  return groupRequest(`/${groupId}`, { method: "PATCH", body: { name } });
+}
+
+// 그룹 삭제. 그룹에 들어 있던 후보는 그대로 남는다.
+export function deleteGroup(groupId) {
+  return groupRequest(`/${groupId}`, { method: "DELETE" });
+}
+
+// 기존 그룹에 후보 추가. 이미 그 그룹에 있는 후보가 섞이면 하나도 넣지 않고 409.
+export function addGroupItems(groupId, itemIds) {
+  return groupRequest(`/${groupId}/items`, { method: "POST", body: { item_ids: itemIds } });
+}
+
+// 그룹에서 빼기. 후보는 그대로 남는다.
+export function removeGroupItem(groupId, itemId) {
+  return groupRequest(`/${groupId}/items/${itemId}`, { method: "DELETE" });
+}
+
+// --- 그룹 공유 링크 (Phase 5) ---------------------------------------------------
+// 백엔드 app/group/router.py 참고. 링크는 그룹 주인만 만들고 끊는다. 받은 사람은 로그인 없이
+// 그 그룹의 지금 후보를 본다(getSharedGroup). 링크를 열기만 해서는 아무것도 저장되지 않는다.
+
+// 공유 링크 만들기. 반환 형태: { id, token, created_at } - token은 이 응답에서만 받을 수 있다.
+export function createGroupShareLink(groupId) {
+  return groupRequest(`/${groupId}/share-links`, { method: "POST" });
+}
+
+// 공유 중지 - 이 그룹으로 만든 링크를 모두 끊는다. 반환 형태: { revoked_count }
+export function revokeGroupShareLinks(groupId) {
+  return groupRequest(`/${groupId}/share-links`, { method: "DELETE" });
+}
+
+// 그룹 공유 링크 열람 - 로그인 불필요(authHeaders 안 붙임). 공유를 중지하면 바로 안 보여야 하므로
+// 브라우저 캐시를 쓰지 않는다. 반환 형태: { name, items: [{ size_id, dong, ho, complex_name, metrics, ... }], count }
+export async function getSharedGroup(token) {
+  const res = await fetch(`${API_BASE_URL}/shared/groups/${encodeURIComponent(token)}`, { cache: "no-store" });
+  if (!res.ok) {
+    const error = new Error(`get shared group failed with status ${res.status}`);
+    error.status = res.status;
+    throw error;
+  }
+  return res.json();
+}
+
+// --- 공유 -------------------------------------------------------------------
+// 백엔드 app/dashboard/router.py의 /dashboard/shares 참고. "만들기"만 로그인 필수고,
 // "열람"(getDashboardShare)은 링크만 있으면 누구나 볼 수 있어야 하므로
 // authHeaders를 붙이지 않는다.
-
-// 저장된 그룹 목록(이름만). 반환 형태: { groups: [{id, name, created_at}], count, max_count }
-export async function getDashboardGroups() {
-  const res = await fetch(`${API_BASE_URL}/dashboard/groups`, {
-    headers: await authHeaders(),
-  });
-  if (!res.ok) {
-    throw new Error(`get dashboard groups failed with status ${res.status}`);
-  }
-  return res.json();
-}
-
-// 지금 관심 매물을 이름 붙여 그룹으로 저장. 항목은 서버가 알아서 스냅샷 뜬다.
-export async function createDashboardGroup(name) {
-  const res = await fetch(`${API_BASE_URL}/dashboard/groups`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(await authHeaders()),
-    },
-    body: JSON.stringify({ name }),
-  });
-  if (!res.ok) {
-    throw new Error(`create dashboard group failed with status ${res.status}`);
-  }
-  return res.json();
-}
-
-// 그룹 불러오기. 지금 관심 매물 목록을 그룹 내용으로 완전히 교체한 뒤,
-// 교체된 최신 목록을 그대로 돌려준다(반환 형태는 getDashboardItems와 동일).
-export async function loadDashboardGroup(groupId) {
-  const res = await fetch(`${API_BASE_URL}/dashboard/groups/${groupId}/load`, {
-    method: "POST",
-    headers: await authHeaders(),
-  });
-  if (!res.ok) {
-    throw new Error(`load dashboard group failed with status ${res.status}`);
-  }
-  return res.json();
-}
-
-// 지금 관심 매물 상태를 이 그룹에 덮어써 갱신한다(새 그룹 생성이 아니라
-// 기존 스냅샷 교체) - 자동저장은 하지 않으므로 사용자가 명시적으로 눌러야
-// 호출된다.
-export async function saveDashboardGroup(groupId) {
-  const res = await fetch(`${API_BASE_URL}/dashboard/groups/${groupId}/save`, {
-    method: "POST",
-    headers: await authHeaders(),
-  });
-  if (!res.ok) {
-    throw new Error(`save dashboard group failed with status ${res.status}`);
-  }
-  return res.json();
-}
-
-// 그룹 이름만 변경한다 - 저장된 매물 스냅샷은 그대로 둔다.
-export async function renameDashboardGroup(groupId, name) {
-  const res = await fetch(`${API_BASE_URL}/dashboard/groups/${groupId}/rename`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(await authHeaders()),
-    },
-    body: JSON.stringify({ name }),
-  });
-  if (!res.ok) {
-    throw new Error(`rename dashboard group failed with status ${res.status}`);
-  }
-  return res.json();
-}
-
-// 그룹 삭제.
-export async function deleteDashboardGroup(groupId) {
-  const res = await fetch(`${API_BASE_URL}/dashboard/groups/${groupId}`, {
-    method: "DELETE",
-    headers: await authHeaders(),
-  });
-  if (!res.ok) {
-    throw new Error(`delete dashboard group failed with status ${res.status}`);
-  }
-  return res.json();
-}
 
 // 지금 관심 매물로 공유 링크(토큰)를 만든다. 반환 형태: { token }
 export async function createDashboardShare() {
@@ -306,6 +391,35 @@ export async function getDashboardShare(token) {
   const res = await fetch(`${API_BASE_URL}/dashboard/shares/${token}`);
   if (!res.ok) {
     throw new Error(`get dashboard share failed with status ${res.status}`);
+  }
+  return res.json();
+}
+
+// AI-01: 등록된 매물(관심 매물)에 대한 AI 종합 분석 (POST /dashboard/insight).
+// itemIds를 안 넘기면 로그인 사용자의 관심 매물 전체를 대상으로 한다.
+// 반환 형태: { summary, items: [{id, strengths, weaknesses}], generated_at }
+//
+// 다른 함수들과 달리 실패 사유를 UI에 그대로 보여줘야 해서(설정 안 됨/후보
+// 없음/외부 LLM 일시 장애를 서로 다른 문구로 안내) 응답 body의 detail을
+// 파싱해 에러 메시지에 싣는다. 백엔드가 항상 FastAPI 기본 에러 형식
+// ({"detail": "..."})으로 응답하므로(app/insight/router.py) 이 값을 우선
+// 쓰고, 파싱 실패 시에만 상태 코드 기반 문구로 대체한다.
+export async function createInsight(itemIds) {
+  const res = await fetch(`${API_BASE_URL}/dashboard/insight`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(await authHeaders()),
+    },
+    body: JSON.stringify(itemIds && itemIds.length ? { item_ids: itemIds } : {}),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    const error = new Error(
+      body?.detail || `create insight failed with status ${res.status}`
+    );
+    error.status = res.status;
+    throw error;
   }
   return res.json();
 }

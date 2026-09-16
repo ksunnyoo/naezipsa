@@ -42,7 +42,12 @@ def create_insight(
         )
 
     try:
-        return service.build_insight(db, profile.id, (payload.item_ids if payload else None))
+        return service.build_insight(
+            db,
+            profile.id,
+            (payload.item_ids if payload else None),
+            service_purposes=profile.service_purposes,
+        )
     except ValueError as e:
         # 후보가 하나도 없는 경우. 사용자가 고칠 수 있는 상황이라 400.
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

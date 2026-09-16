@@ -96,6 +96,9 @@ def get_nearby_subscription(
     preferred = preferred_regions_from_codes([code])
     if not preferred:
         raise HTTPException(status_code=422, detail="기준 매물의 지역 코드를 확인할 수 없습니다.")
+    # DB 조회는 여기서 끝난다. 아래 청약홈 API를 기다리는 동안 트랜잭션을 열어두면
+    # DB 연결을 쥔 채 기다리게 되므로 먼저 끝낸다.
+    db.commit()
     try:
         items = fetch_categorized_announcements(limit=None)
     except SubscriptionFetchError as exc:

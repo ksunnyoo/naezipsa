@@ -392,6 +392,45 @@ def compute_price_distribution(trades: list[RawTradeSale]) -> dict:
     }
 
 
+def compute_trade_points(records, months: int, amount_attr: str = "deal_amount") -> dict:
+    """실거래 분포도 차트(2026-09 프론트 요구사항) 전용 — /trend·/rent-trend(월별
+    중앙값)와 달리 점 하나하나의 위치가 필요해서 개별 거래를 그대로 반환한다.
+
+    필터링 규칙은 다른 실데이터 API들과 동일하게 맞춘다:
+    1) exclude_incomplete_recent로 신고지연 최근 2개월 제외 (recent_median_price·
+       trend·price-distribution과 동일 규칙)
+    2) months(3/12/36) 하한 적용 — /trend가 라우터 단에서 하는 것과 동일한 방식
+
+    amount_attr로 매매(deal_amount)/전세(deposit) 둘 다 처리한다(구조가 같아서
+    RawTradeSale·RawTradeRent 모두 이 함수 하나로 충분함).
+    """
+    filtered = exclude_incomplete_recent(records, months=2)
+    if months < 60:
+        today = date.today()
+        cutoff_start = today.year * 12 + today.month - months
+        filtered = [
+            r for r in filtered
+            if r.deal_year and r.deal_month and (r.deal_year * 12 + r.deal_month) >= cutoff_start
+        ]
+
+    points = []
+    for r in filtered:
+        amount = getattr(r, amount_attr, None)
+        if amount is None:
+            continue
+        points.append({
+            "deal_amount": amount,
+            "deal_year": r.deal_year,
+            "deal_month": r.deal_month,
+            "floor": getattr(r, "floor", None),
+        })
+
+    amounts = [p["deal_amount"] for p in points]
+    average_price = round(statistics.mean(amounts)) if amounts else None
+
+    return {"count": len(points), "average_price": average_price, "points": points}
+
+
 def compute_ranking(db: Session, size_id: int) -> dict:
     """같은 구 + 같은 평형(±5㎡) 내 평단가 랭킹."""
     size, complex_ = _get_size_and_complex(db, size_id)

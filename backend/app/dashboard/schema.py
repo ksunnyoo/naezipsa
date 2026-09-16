@@ -10,10 +10,11 @@ DB 모델(app/dashboard/model.py)이 "저장 형태"라면, 이 파일은 "주�
 대시보드 집계 응답(A-09)이 프로필을 포함하므로 user 스키마를 가져다 쓴다.
 """
 from datetime import datetime
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StrictInt, field_validator
 
+from app.dashboard.model import MAX_DASHBOARD_ITEMS
 from app.user.schema import ProfileResponse
 
 ItemStatus = Literal["considering", "interested", "excluded"]
@@ -54,6 +55,15 @@ class ItemDetailsRequest(BaseModel):
     interior_state: InteriorState | None = None
     memo: str | None = Field(default=None, max_length=500)
 
+    # 대시보드 카드 체크박스(비교 차트 포함 여부). 다른 필드와 달리 "지우기"
+    # 개념이 없는 단순 불리언이라 기본값을 None이 아니라 True로 둔다 - 그래야
+    # A-03(등록)에서 이 필드를 생략해도 model_dump()가 True를 채워 넣는다
+    # (다른 필드들처럼 None이 그대로 들어가면 NOT NULL 컬럼이라 에러가 난다).
+    # A-06(수정)에서는 라우터가 exclude_unset=True로 diff를 뜨므로, 요청 바디에
+    # "checked" 키 자체가 없으면(체크박스 토글이 아닌 다른 수정이면) 그대로
+    # 건드리지 않는다.
+    checked: bool = True
+
 
 class DashboardItemCreateRequest(ItemDetailsRequest):
     """A-03: 후보 등록 요청. 필수값은 size_id 하나뿐이다.
@@ -72,6 +82,39 @@ class ItemStatusRequest(BaseModel):
     """
 
     status: ItemStatus
+
+
+# --- 정렬 순서 저장 (Phase 3 보완) ------------------------------------------
+
+# 문자열("11")·불리언(true)·0 이하를 후보 id로 받지 않는다.
+OrderedItemId = Annotated[StrictInt, Field(gt=0)]
+
+
+class ItemOrderRequest(BaseModel):
+    """내 전체 후보의 표시 순서 저장 요청 (PATCH /dashboard/items/order).
+
+    item_ids           저장할 순서. 내 후보 전체가 한 번씩 들어 있어야 한다.
+    expected_item_ids  드래그를 시작하기 전에 서버에서 받은 순서. 지금 서버 순서와 다르면
+                       다른 탭·기기에서 목록이 바뀐 것이라 저장하지 않는다(409).
+
+    사용자 id·그룹 id·checked 같은 다른 값은 받지 않는다.
+    """
+
+    item_ids: list[OrderedItemId] = Field(max_length=MAX_DASHBOARD_ITEMS)
+    expected_item_ids: list[OrderedItemId] = Field(max_length=MAX_DASHBOARD_ITEMS)
+
+    @field_validator("item_ids", "expected_item_ids")
+    @classmethod
+    def reject_duplicate_ids(cls, value: list[int]) -> list[int]:
+        if len(set(value)) != len(value):
+            raise ValueError("같은 후보가 중복으로 들어 있습니다.")
+        return value
+
+
+class ItemOrderResponse(BaseModel):
+    """저장된 순서. 후보 상세는 다시 보내지 않는다."""
+
+    item_ids: list[int]
 
 
 # --- 응답 -----------------------------------------------------------------
@@ -95,6 +138,9 @@ class DashboardItemResponse(BaseModel):
     direction: Direction | None = None
     interior_state: InteriorState | None = None
     memo: str | None = None
+    checked: bool
+    # 표시 순서(0부터). 서버가 관리하며 등록·수정 요청으로는 바꿀 수 없다.
+    sort_order: int
     created_at: datetime
     updated_at: datetime
 
@@ -161,7 +207,7 @@ class DashboardItemListResponse(BaseModel):
 
     배열을 그대로 주지 않고 count/max_count를 함께 감싼다.
     프론트가 "3 / 6" 같은 표시를 하려고 상한값을 하드코딩하지 않아도 되게 하려는 것이다.
-    표시 순서는 프론트가 정하므로 백엔드는 등록순으로만 준다.
+    순서는 사용자가 저장한 순서(sort_order)이고, 순번이 같으면 등록순이다.
     """
 
     items: list[DashboardItemWithMetrics]
@@ -189,13 +235,12 @@ class DashboardResponse(BaseModel):
     max_count: int
 
 
-# --- 그룹 저장/불러오기, 공유 -----------------------------------------------
+# --- 공유 ------------------------------------------------------------------
 #
-# "그룹"은 그 시점의 관심 매물(dashboard_items) 전체를 이름 붙여 떠두는
-# 스냅샷이고, "공유"는 그 스냅샷을 로그인 없이도 볼 수 있게 토큰 하나로
-# 공개하는 것이다. 둘 다 항목을 SnapshotItem 모양(JSONB)으로 저장한다 -
-# DashboardItem처럼 실제 테이블 행이 아니라서 id/status/생성시각 같은
-# 필드가 없다.
+# "공유"는 그 시점의 관심 매물(dashboard_items) 전체를 떠둔 스냅샷을 로그인
+# 없이도 볼 수 있게 토큰 하나로 공개하는 것이다. 항목을 SnapshotItem 모양(JSONB)으로
+# 저장한다 - DashboardItem처럼 실제 테이블 행이 아니라서 id/status/생성시각 같은
+# 필드가 없다. 그룹 API의 요청·응답은 app/group/schema.py에 있다.
 
 
 class SnapshotItem(BaseModel):
@@ -212,7 +257,7 @@ class SnapshotItem(BaseModel):
 
 
 class SnapshotItemWithInfo(SnapshotItem):
-    """스냅샷 항목 + 단지명·평형·시세 지표 + 규제 지정 여부. 그룹/공유
+    """스냅샷 항목 + 단지명·평형·시세 지표 + 규제 지정 여부. 공유
     미리보기가 쓴다."""
 
     complex_name: str | None = None
@@ -222,34 +267,6 @@ class SnapshotItemWithInfo(SnapshotItem):
     pyeong: int | None = None
     metrics: ItemMetrics | None = None
     regulation: RegulationStatus = Field(default_factory=RegulationStatus)
-
-
-class DashboardItemGroupCreateRequest(BaseModel):
-    """그룹 저장 요청. 이름만 받는다 - 항목은 서버가 "지금 내 관심 매물"을 그대로 스냅샷 뜬다."""
-
-    name: str = Field(min_length=1, max_length=30)
-
-
-class DashboardItemGroupRenameRequest(BaseModel):
-    """그룹 이름 변경 요청. 저장된 매물 스냅샷(items)은 건드리지 않고 이름만 바꾼다."""
-
-    name: str = Field(min_length=1, max_length=30)
-
-
-class DashboardItemGroupSummary(BaseModel):
-    """그룹 하위 버튼 한 건. 버튼엔 이름만 필요해서 항목은 담지 않는다."""
-
-    model_config = ConfigDict(from_attributes=True)
-
-    id: int
-    name: str
-    created_at: datetime
-
-
-class DashboardItemGroupListResponse(BaseModel):
-    groups: list[DashboardItemGroupSummary]
-    count: int
-    max_count: int
 
 
 class DashboardShareCreateResponse(BaseModel):

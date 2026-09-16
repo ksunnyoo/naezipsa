@@ -1,6 +1,6 @@
 "use client";
 
-import { BellIcon, GearIcon, GroupSaveIcon, LoginIcon, ShareIcon } from "./icons";
+import { BellIcon, GearIcon, GroupSaveIcon, LoginIcon, ProfileIcon, ShareIcon } from "./icons";
 import HeaderContentTabs from "./HeaderContentTabs";
 import GroupBar from "./Dashboard/GroupBar";
 
@@ -21,15 +21,12 @@ export default function Header({
   onLoginClick,
   user,
   onLogoutClick,
+  onProfileClick,
+  profileReady,
   activeContentTab,
   onContentTabChange,
   showContentTabs,
-  groupBarOpen,
-  onGroupBarToggle,
-  groups,
-  onSelectGroup,
-  onAddGroupClick,
-  onDeleteGroup,
+  groupMenu,
   onShare,
 }) {
   return (
@@ -74,30 +71,28 @@ export default function Header({
             {/* group-save-wrap: position:relative 기준점. GroupBar는 이
                 버튼 바로 아래에 position:absolute로 붙어서 중앙 정렬된다
                 (Header 전체가 아니라 이 버튼 하나를 기준으로 뜬다). */}
-            <div className="group-save-wrap">
-              <button
-                type="button"
-                tabIndex={0}
-                className={"nav-icon-btn" + (groupBarOpen ? " is-active" : "")}
-                aria-label="그룹 저장"
-                aria-pressed={groupBarOpen}
-                onClick={onGroupBarToggle}
-              >
-                <GroupSaveIcon />
-              </button>
-              <GroupBar
-                open={groupBarOpen}
-                groups={groups}
-                onSelectGroup={onSelectGroup}
-                onAddClick={onAddGroupClick}
-                onDeleteGroup={onDeleteGroup}
-              />
-            </div>
+            {groupMenu && (
+              <div className="group-save-wrap">
+                <button
+                  type="button"
+                  tabIndex={0}
+                  className={"nav-icon-btn" + (groupMenu.open ? " is-active" : "")}
+                  aria-label="그룹"
+                  aria-expanded={groupMenu.open}
+                  onClick={groupMenu.onToggle}
+                >
+                  <GroupSaveIcon />
+                </button>
+                {/* 닫힐 때 내려서, 이름을 고치던 상태가 다음에 열 때 남지 않게 한다. */}
+                {groupMenu.open && <GroupBar menu={groupMenu} />}
+              </div>
+            )}
             <button
               type="button"
               tabIndex={0}
               className="nav-icon-btn"
               aria-label="공유하기"
+              title={groupMenu?.activeGroup ? "보고 있는 그룹 링크 공유" : "관심 매물 공유"}
               onClick={onShare}
             >
               <ShareIcon />
@@ -106,7 +101,18 @@ export default function Header({
         )}
         {user ? (
           <div className="nav-user" data-component="NavUser">
-            <span className="nav-user-email">{user.email}</span>
+            {/* 공유·그룹과 같은 원형 아이콘 버튼. 화면 읽기 프로그램에는 "마이페이지"로 읽힌다. */}
+            <button
+              type="button"
+              tabIndex={0}
+              className="nav-icon-btn"
+              aria-label="마이페이지"
+              onClick={onProfileClick}
+              disabled={!profileReady}
+              title={profileReady ? "마이페이지" : "프로필을 불러온 후 이용할 수 있습니다"}
+            >
+              <ProfileIcon />
+            </button>
             <button
               type="button"
               tabIndex={0}

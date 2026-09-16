@@ -11,6 +11,7 @@
 """
 import json
 import logging
+import time
 
 import requests
 
@@ -24,8 +25,12 @@ _MODEL = "gemini-3.6-flash"
 _URL = f"https://generativelanguage.googleapis.com/v1beta/models/{_MODEL}:generateContent"
 
 # 사용자가 기다리는 화면이라 무한정 기다릴 수 없다.
-# 후보 6개 분석에 보통 5~10초가 걸린다.
+# 생각 단계를 낮춘 설정으로 후보 6개 분석에 보통 5~7초가 걸린다(2026-09-16 측정).
 _TIMEOUT_SECONDS = 30
+
+# 제공자가 "요청이 많다"(503)나 "잠시 후 다시"(429)로 답하면 잠깐 쉬고 한 번만 다시 시도한다.
+_RETRY_STATUS = frozenset({429, 503})
+_RETRY_DELAY_SECONDS = 1
 
 
 class LLMUnavailable(RuntimeError):
@@ -60,19 +65,29 @@ def ask_json(system_prompt: str, user_prompt: str, response_schema: dict) -> dic
             # 같은 후보를 두 번 분석했을 때 답이 크게 달라지면 신뢰를 잃는다.
             # 창작이 아니라 주어진 숫자를 해석하는 일이므로 낮게 둔다.
             "temperature": 0.3,
+            # 답을 쓰기 전에 오래 "생각"하지 않게 한다. 주어진 숫자를 비교·요약하는 일이라
+            # 생각 단계가 없어도 되고, 응답이 약 17초 → 6초로 짧아진다(2026-09-16 측정).
+            "thinkingConfig": {"thinkingLevel": "low"},
         },
     }
 
-    try:
-        res = requests.post(
-            _URL,
-            params={"key": GEMINI_API_KEY},
-            json=payload,
-            timeout=_TIMEOUT_SECONDS,
-        )
-    except requests.RequestException as e:
-        logger.warning("LLM 호출 실패: %s", e)
-        raise LLMUnavailable("AI 분석 서버에 연결하지 못했습니다.") from e
+    for attempt in range(2):
+        try:
+            res = requests.post(
+                _URL,
+                params={"key": GEMINI_API_KEY},
+                json=payload,
+                timeout=_TIMEOUT_SECONDS,
+            )
+        except requests.RequestException as e:
+            logger.warning("LLM 호출 실패: %s", e)
+            raise LLMUnavailable("AI 분석 서버에 연결하지 못했습니다.") from e
+        if res.status_code in _RETRY_STATUS and attempt == 0:
+            # 제공자 쪽 일시 과부하. 사용자가 다시 누르지 않아도 되게 한 번만 더 시도한다.
+            logger.warning("LLM 일시 과부하 응답 %s, %s초 뒤 다시 시도", res.status_code, _RETRY_DELAY_SECONDS)
+            time.sleep(_RETRY_DELAY_SECONDS)
+            continue
+        break
 
     if res.status_code != 200:
         # 응답 본문에 API 키가 섞여 나올 수 있으므로 앞부분만 로그에 남긴다.

@@ -9,7 +9,7 @@
 프로필 테이블(app/user/model.py)과 같은 Base를 공유한다.
 Alembic이 관리하는 테이블은 전부 app/core/database.py의 Base를 상속해야 한다.
 """
-from sqlalchemy import BigInteger, Boolean, Column, DateTime, Index, Integer, String, Uuid, func
+from sqlalchemy import BigInteger, Boolean, CheckConstraint, Column, DateTime, Index, Integer, String, Uuid, func
 from sqlalchemy.dialects.postgresql import JSONB
 
 from app.core.database import Base
@@ -32,10 +32,6 @@ INTERIOR_STATES = ("none", "partial", "full")
 
 # 한 사용자가 담을 수 있는 후보 매물 수 상한 (기획 규칙)
 MAX_DASHBOARD_ITEMS = 6
-
-# 한 사용자가 저장할 수 있는 그룹 수 상한. 하위 버튼이 한 줄에 4개라
-# 2줄(8개)까지로 잡았다 - 화면에서 더 늘려야 하면 이 값만 올리면 된다.
-MAX_DASHBOARD_GROUPS = 8
 
 
 class DashboardItem(Base):
@@ -61,6 +57,9 @@ class DashboardItem(Base):
     __table_args__ = (
         # "내 후보 목록" 조회가 주 사용 패턴이라 user_id에 인덱스를 건다.
         Index("ix_dashboard_items_user_id", "user_id"),
+        # 내 후보를 저장한 순서대로 읽는다(순번이 같으면 id순).
+        Index("ix_dashboard_items_user_sort", "user_id", "sort_order", "id"),
+        CheckConstraint("sort_order >= 0", name="ck_dashboard_items_sort_order"),
     )
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
@@ -97,37 +96,21 @@ class DashboardItem(Base):
 
     memo = Column(String(500))
 
+    # 대시보드 카드 체크박스(비교 차트에 포함할지 여부). status(검토중/관심/제외)와는
+    # 별개 개념 - 체크 여부는 그냥 "지금 화면에서 비교 대상으로 켜뒀는지"다.
+    # 기본값 True: 새로 등록한 매물은 곧바로 차트 비교에 포함되는 기존 프론트
+    # 동작과 맞춘다.
+    checked = Column(Boolean, nullable=False, server_default="true")
+
+    # 사용자가 드래그로 정한 표시 순서(0부터). 서버만 쓴다 - 등록할 때 맨 뒤 번호를 매기고,
+    # PATCH /dashboard/items/order 로만 바꾼다. 삭제로 생긴 빈 번호는 의미가 없어 그대로 둔다.
+    # 체크 여부와는 별개다(체크를 끈 후보도 순서에 포함된다).
+    sort_order = Column(Integer, nullable=False, server_default="0")
+
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at = Column(
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
     )
-
-
-class DashboardItemGroup(Base):
-    """사용자가 이름 붙여 저장해둔 관심 매물 "세트" (최대 8개).
-
-    지금 관심 매물(dashboard_items)을 그대로 스냅샷 떠서 저장한다. 별도
-    테이블(그룹 항목 하나하나)로 쪼개지 않고 JSONB 한 컬럼에 통째로
-    담는 이유: 조회 패턴이 "그룹 하나를 통째로 읽거나 통째로 되살리는"
-    것뿐이라 관계형으로 쪼개봐야 이득이 없고(최대 8그룹 x 6개), 오히려
-    "불러오기 = dashboard_items를 이 내용으로 교체" 로직이 한 번의
-    delete+insert로 단순해진다.
-
-    항목 모양은 app/dashboard/schema.py의 SnapshotItem과 정확히 같다
-    (size_id + 선택 매물정보 + checked).
-    """
-
-    __tablename__ = "dashboard_item_groups"
-    __table_args__ = (
-        Index("ix_dashboard_item_groups_user_id", "user_id"),
-    )
-
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
-    user_id = Column(Uuid(as_uuid=True), nullable=False)
-    name = Column(String(30), nullable=False)
-    items = Column(JSONB, nullable=False)
-
-    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
 
 class DashboardShare(Base):
@@ -138,7 +121,7 @@ class DashboardShare(Base):
     별도 컬럼으로 둔다 - id를 그대로 노출하면 1, 2, 3... 순회로 남의 공유를
     엿볼 수 있다.
 
-    dashboard_item_groups와 마찬가지로 항목은 JSONB 스냅샷. 원본
+    항목은 JSONB 스냅샷. 원본
     dashboard_items가 나중에 바뀌거나 지워져도 이미 만든 공유 링크의
     내용은 그대로 유지된다(공유 시점 스냅샷이라는 의미이기도 함).
     """

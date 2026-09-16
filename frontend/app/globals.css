@@ -56,7 +56,7 @@
      같은 x좌표에서 시작하도록 이 세 값을 그대로 계산에 재사용한다. .dashboard,
      .dashboard-list도 이 변수를 그대로 쓰므로 값이 바뀌어도 항상 서로 맞는다 */
   --dashboard-h-pad: clamp(20px, 0.5vw, 36px);
-  --dashboard-list-w: clamp(260px, 17vw, 280px);
+  --dashboard-list-w: clamp(240px, 17vw, 280px);
   --dashboard-gap: 16px;
   --chart-area-start: calc(
     var(--dashboard-h-pad) + var(--dashboard-list-w) + var(--dashboard-gap)
@@ -232,6 +232,13 @@ select:focus-visible {
   background: var(--color-surface-subtle);
   border-color: var(--color-primary);
 }
+/* 프로필을 불러오기 전의 마이페이지 아이콘처럼 아직 누를 수 없는 아이콘 버튼 */
+.nav-icon-btn:disabled,
+.nav-icon-btn:disabled:hover {
+  background: var(--color-surface);
+  opacity: 0.45;
+  cursor: not-allowed;
+}
 .nav-icon-btn .badge-dot {
   position: absolute;
   top: 8px;
@@ -378,6 +385,15 @@ select:focus-visible {
   flex-direction: column;
   gap: 16px;
 }
+
+.profile-onboarding { max-height: calc(100dvh - 32px); overflow-y: auto; }
+.profile-intro { margin: 0; line-height: 1.6; font-size: 14px; overflow-wrap: anywhere; }
+.profile-onboarding select { min-height: 44px; padding: 8px 12px; border: 1px solid var(--color-border-strong); border-radius: 12px; background: var(--color-panel); color: var(--color-ink); }
+.profile-purposes { border: 0; padding: 0; margin: 0; }
+.profile-purposes legend { margin-bottom: 10px; font-size: 14px; font-weight: 600; }
+.profile-purposes .chip-row { flex-wrap: wrap; }
+.profile-onboarding :focus-visible { outline: 2px solid var(--color-primary); outline-offset: 3px; }
+.profile-load-error { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 50; width: min(520px, calc(100vw - 32px)); padding: 16px; display: flex; gap: 12px; background: var(--color-panel); border: 1px solid var(--color-border); border-radius: 12px; font-size: 14px; }
 
 .auth-field {
   display: flex;
@@ -1023,11 +1039,14 @@ select:focus-visible {
   gap: 4px;
 }
 .insight-section-title {
+  /* 다른 차트 카드 타이틀(.chart-placeholder-title)과 동일한 폰트
+     크기/색으로 통일(2026-09 피드백 - 여기만 더 크고 더 진한 색이라
+     따로 튀어 보임) */
   margin: 0;
-  font-size: clamp(14px, 2vh, 16px);
+  font-size: clamp(12px, 1.7vh, 14px);
   font-weight: 700;
   letter-spacing: -0.02em;
-  color: var(--color-ink);
+  color: #1f2937;
 }
 /* AI 분석 자리표시 박스 + 리사이즈 손잡이 + 뉴스/청약 카드 묶음. title
    다음에 남는 공간을 이 wrapper가 전부 갖고(flex:1), 그 안에서 AI 박스는
@@ -1046,18 +1065,26 @@ select:focus-visible {
    실제 콘텐츠로 교체 */
 .insight-ai-placeholder {
   position: relative;
+  display: flex;
+  flex-direction: column;
   flex: 0 0 auto;
   min-height: 0;
   background: var(--color-panel);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-xl);
+  padding: 18px 18px 8px;
+}
+/* 제목 + 복사/분석 버튼 묶음 - 아래 .insight-ai-scroll만 스크롤되고 이
+   줄은 flex-shrink:0(.insight-card-header)이라 스크롤해도 항상 보인다. */
+.insight-ai-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
 }
 /* 마우스가 AI 분석 영역에 들어왔을 때만 보이는 복사 버튼 - 우측 상단에
    떠 있는 형태로, 평소엔 opacity:0으로 숨겨둔다 */
 .insight-copy-btn {
-  position: absolute;
-  top: 10px;
-  right: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1066,17 +1093,122 @@ select:focus-visible {
   border: 1px solid var(--color-border-strong);
   border-radius: var(--radius-md);
   background: var(--color-panel);
-  opacity: 0;
   cursor: pointer;
-  transition:
-    opacity 0.15s ease,
-    background 0.15s ease;
-}
-.insight-ai-placeholder:hover .insight-copy-btn {
-  opacity: 1;
+  transition: background 0.15s ease;
 }
 .insight-copy-btn:hover {
   background: var(--color-surface-subtle);
+}
+/* AI-01(POST /dashboard/insight) 결과 영역 - 자리표시 박스 대신 실제
+   요약/항목별 강점·약점을 렌더링한다. */
+.insight-ai-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.insight-ai-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  /* 안내/로딩/에러 문구(.insight-ai-status)를 이 영역 "높이 전체" 기준으로
+     가운데 정렬하려면 이 요소가 그 전체 높이를 실제로 차지하고 있어야
+     한다 - 내용이 적을 땐 원래 콘텐츠 높이만큼만 줄어드는 flex 기본값이라
+     min-height로 바닥을 깔아준다(.insight-ai-scroll이 flex:1로 이미 실제
+     높이를 갖고 있어 %가 정상적으로 계산됨). */
+  min-height: 100%;
+}
+/* AI 분석 안내/로딩/에러 문구 공통 - 리사이즈로 영역 높이가 계속 바뀌기
+   때문에 .news-message의 고정 padding으로 "가운데처럼 보이게" 하던 방식은
+   높이가 바뀌면 안 맞았다. 대신 이 래퍼를 영역 전체 높이로 채우고 flex로
+   실제 가운데 정렬한다. */
+.insight-ai-status {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  text-align: center;
+}
+.insight-ai-status .news-message {
+  padding: 0;
+}
+/* "AI 분석 시작하기"를 누르기 전, 관심 매물은 있지만 아직 분석 결과가
+   없는 빈 화면에 뜨는 안내 문구(InsightPanel.jsx idle 상태). */
+.insight-ai-idle-text {
+  width: 100%;
+  text-align: center;
+}
+.insight-ai-analyze-btn {
+  flex-shrink: 0;
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-md);
+  background: var(--color-primary-bg);
+  color: var(--color-primary-hover);
+  font-size: 12.5px;
+  font-weight: 700;
+  padding: 7px 14px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.insight-ai-analyze-btn:hover {
+  background: var(--color-primary);
+  color: #fff;
+}
+.insight-ai-analyze-btn:disabled {
+  border-color: var(--color-border-strong);
+  background: var(--color-surface-subtle);
+  color: var(--color-text-faint);
+  cursor: not-allowed;
+}
+.insight-ai-summary {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--color-ink-2);
+  margin: 12px 0;
+}
+.insight-ai-items {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.insight-ai-item {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.insight-ai-item-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-ink);
+}
+.insight-ai-item-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.insight-ai-tag {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+}
+.insight-ai-tag--positive {
+  background: var(--color-primary-bg);
+  color: var(--color-primary-hover);
+}
+.insight-ai-tag--negative {
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+}
+.insight-ai-item-text {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--color-ink-2);
 }
 .insight-resize-handle {
   flex: 0 0 auto;
@@ -1110,7 +1242,7 @@ select:focus-visible {
   display: flex;
   gap: 20px;
   flex: 1;
-  min-height: 185px;
+  min-height: 0px;
 }
 .insight-card {
   flex: 1;
@@ -1127,12 +1259,13 @@ select:focus-visible {
 .insight-card-header {
   flex-shrink: 0;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
+  gap: 12px;
   margin-bottom: 10px;
 }
 .insight-card-title {
-  font-size: 15px;
+  font-size: clamp(12px, 1.7vh, 14px);
   font-weight: 700;
   letter-spacing: -0.02em;
   color: var(--color-ink);
@@ -1224,7 +1357,7 @@ select:focus-visible {
   gap: 14px;
   padding-bottom: 10px;
   padding-right: 10px;
-  margin-top: 12px;
+  margin-top: 0;
 }
 .subscription-row {
   padding-bottom: 14px;
@@ -1237,6 +1370,17 @@ select:focus-visible {
 .subscription-row:last-child {
   padding-bottom: 0;
   border-bottom: none;
+}
+/* 뉴스 리스트와 동일한 이유로 outline 대신 제목(단지명) 글자만 굵어지는
+   걸로 포커스를 표시한다 - 주소/메타 등 다른 텍스트는 그대로 둔다. */
+.subscription-row:focus,
+.subscription-row:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+.subscription-row:focus .subscription-row-name,
+.subscription-row:focus-visible .subscription-row-name {
+  font-weight: 700;
 }
 .subscription-row-top {
   display: flex;
@@ -1302,8 +1446,8 @@ select:focus-visible {
   align-items: center;
   font-size: 11px;
   font-weight: 600;
-  color: var(--color-text-secondary);
-  background: var(--color-border-subtle);
+  color: #4b5563;
+  background: #edf1f5;
   border-radius: var(--radius-full);
   padding: 3px 9px;
 }
@@ -1337,78 +1481,6 @@ select:focus-visible {
   border-radius: var(--radius-2xl);
 }
 
-/* ---------- 활성 그룹 표시줄 (DashboardList 상단) ---------- */
-/* 지금 목록이 어느 그룹에서 왔는지 보여준다. 그룹은 자동저장되지 않으므로
-   편집한 내용을 반영하려면 이 저장 버튼을 눌러야 한다. 리스트 자체가
-   스크롤 컨테이너라 sticky로 붙여서 스크롤해도 항상 보이게 한다. */
-.active-group-bar {
-  position: sticky;
-  top: -12px;
-  z-index: 5;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: -12px -8px 4px -12px;
-  padding: 10px 8px 10px 12px;
-  background: var(--color-bg);
-  border-bottom: 1px solid var(--color-border);
-}
-/* 이름+수정 버튼을 한 묶음으로 - 저장 버튼과는 별개로, 이 묶음 안에서
-   이름이 남는 공간을 갖는다(flex:1 + min-width:0). 바깥 .active-group-bar
-   에서는 이 묶음 전체가 flex:1이라 저장 버튼(flex-shrink:0)이 항상
-   맨 오른쪽 끝에 붙고, 이름 칸에 남는 실제 폭은 "바 전체 폭 - 수정 버튼
-   폭 - 저장 버튼 폭 - gap들"이 된다 - 브라우저가 레이아웃마다 이 값을
-   다시 계산해주므로 버튼 크기가 나중에 바뀌어도 숫자를 따로 맞출 필요가
-   없다. 그 폭을 넘는 이름은 ellipsis로 "..." 처리된다. */
-.active-group-name-group {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-.active-group-name {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--color-ink);
-}
-.active-group-rename-btn {
-  flex-shrink: 0;
-  width: 26px;
-  height: 26px;
-  border: none;
-  background: none;
-  border-radius: var(--radius-md);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  outline: none;
-  cursor: pointer;
-  transition: background 0.15s ease;
-}
-.active-group-rename-btn:hover {
-  background: var(--color-surface-subtle);
-}
-.active-group-save-btn {
-  flex-shrink: 0;
-  height: 28px;
-  padding: 0 14px;
-  border: none;
-  border-radius: var(--radius-md);
-  background: var(--color-primary);
-  color: var(--color-on-primary);
-  font-size: 12.5px;
-  font-weight: 700;
-  transition: background 0.15s ease;
-}
-.active-group-save-btn:hover {
-  background: var(--color-primary-hover);
-}
 /* ---------- 커스텀 스크롤바 (전 영역 공통) ----------
    width/thumb색/radius는 :root의 --scrollbar-* 변수로 관리한다. 새로운
    스크롤 영역에도 같은 스타일을 적용하고 싶으면, 아래 :is() 안에 그
@@ -1606,7 +1678,7 @@ select:focus-visible {
   flex-wrap: wrap;
 }
 .chart-placeholder-title {
-  font-size: clamp(12px, 1.7vh, 16px);
+  font-size: clamp(12px, 1.7vh, 14px);
   font-weight: 700;
   letter-spacing: -0.02em;
   color: #1f2937;
@@ -1997,6 +2069,242 @@ select:focus-visible {
   font-size: 12.5px;
   color: var(--color-text-subtle);
   text-align: center;
+}
+
+.trade-distribution-chart__wrap {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(4px, 1.5vh, 10px);
+  height: 100%;
+  padding-top: 6px;
+}
+.trade-distribution-chart__header-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.trade-distribution-chart__legend {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: clamp(11px, 1.5vh, 12px);
+  color: #6b7280;
+  font-weight: 500;
+}
+.trade-distribution-chart__legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.trade-distribution-chart__legend-dot {
+  /* 툴팁 칩(.trade-distribution-chart__tooltip-dot)과 동일하게 살짝
+     라운드 준 사각형으로 통일 (2026-09 피드백) */
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+.trade-distribution-chart__period-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: clamp(11px, 1.5vh, 12px);
+  color: #4b5563;
+  font-weight: 600;
+}
+.trade-distribution-chart__select {
+  height: 24px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+  padding: clamp(2px, 0.6vh, 4px) 10px;
+  font-size: clamp(11px, 1.5vh, 12px);
+  color: #111827;
+  font-weight: 500;
+  outline: none;
+}
+.trade-distribution-chart__type-tabs {
+  position: relative;
+  display: inline-flex;
+  gap: 2px;
+  background: var(--color-border-subtle);
+  border-radius: var(--radius-full);
+  padding: 2px;
+  margin-top: 2px;
+  width: fit-content;
+}
+.trade-distribution-chart__type-tab-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  bottom: 2px;
+  width: calc(50% - 3px);
+  background: #fff;
+  border-radius: var(--radius-full);
+  box-shadow: 0 1px 2px rgba(17, 17, 17, 0.08);
+  transition: transform 0.22s ease;
+  z-index: 0;
+  pointer-events: none;
+}
+.trade-distribution-chart__type-tab {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  height: 22px;
+  padding: 0 14px;
+  border: none;
+  border-radius: var(--radius-full);
+  background: transparent;
+  font-size: clamp(11px, 1.5vh, 12px);
+  font-weight: 600;
+  color: #6b7280;
+  transition: color 0.22s ease;
+}
+.trade-distribution-chart__type-tab.is-active {
+  color: var(--color-ink);
+}
+.trade-distribution-chart__type-tab:focus,
+.trade-distribution-chart__type-tab:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+.trade-distribution-chart__chart {
+  /* 부모(.chart-main)가 flex로 배분한 높이를 그대로 채운다(flex:1;
+     min-height:0). 예전엔 안쪽 <svg width="100%" height="100%">가
+     replaced element라 그 배분 높이를 항상 안정적으로 percentage로
+     읽어들이지 못하고(플렉스 자식 안의 SVG 특유의 엣지 케이스) viewBox
+     비율(640:300)로 계산한 훨씬 큰 높이로 렌더링되면서 카드 하단 밖으로
+     넘치는 문제가 있었다(2026-09). 지금은 그 문제를
+     RealTradeDistributionChart.jsx의 ResizeObserver가 이 요소의 실제
+     렌더 크기(px)를 직접 측정해서 viewBox/svg의 width·height 속성에
+     그대로 반영하는 방식으로 해결했기 때문에(1 unit = 1px), CSS에서
+     높이를 고정 px로 못 박아 둘 필요가 없다 - 오히려 카드의 실제 가용
+     높이가 그 고정값보다 크면 아래쪽에 빈 공간이 남는 부작용이 있었다.
+     flex:1로 남는 공간을 그대로 채운다. */
+  position: relative;
+  flex: 0.95;
+  width: 100%;
+  min-height: 0;
+  padding: 4px;
+}
+.trade-distribution-chart__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 100%;
+  font-size: 12.5px;
+  color: var(--color-text-subtle);
+  text-align: center;
+}
+.trade-distribution-chart__svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.trade-distribution-chart__gridline {
+  stroke: var(--color-border-subtle);
+  stroke-width: 1;
+  stroke-dasharray: 3 4;
+}
+.trade-distribution-chart__baseline {
+  /* 데이터가 없는 컬럼도 같은 축 위에 있다는 걸 보여주는 옅은 기준선 */
+  stroke: var(--color-border-subtle);
+  stroke-width: 1;
+}
+.trade-distribution-chart__tick-label {
+  /* 실거래가 추이(PriceTrendChart) 등 다른 차트의 아이템 이름 라벨과
+     동일한 폰트 크기/색으로 통일(2026-09 피드백 - y축 텍스트도 같이
+     맞춰달라는 요청) */
+  font-size: 11px;
+  font-weight: 500;
+  fill: #6b7280;
+}
+.trade-distribution-chart__txn-dot {
+  fill: #c3c0b9;
+  stroke: #fff;
+  stroke-width: 1;
+}
+.trade-distribution-chart__ask-dot {
+  fill: var(--color-primary);
+  stroke: #fff;
+  stroke-width: 1.5;
+}
+.trade-distribution-chart__item-label {
+  /* 실거래가 추이(PriceTrendChart) 축 라벨과 동일한 폰트 크기/색으로
+     통일(2026-09 피드백 - 차트마다 아이템 이름 폰트가 서로 달라 보임) */
+  font-size: 11px;
+  font-weight: 500;
+  fill: #6b7280;
+}
+.trade-distribution-chart__col-hit {
+  fill: transparent;
+  cursor: pointer;
+  outline: none;
+}
+.trade-distribution-chart__tooltip {
+  /* 다른 실데이터 차트 툴팁(PriceTrendChart/TradeVolumeLiquidityChart 등)과
+     동일한 흰 배경 + 어두운 텍스트 컨벤션으로 맞춤 (2026-09 피드백 —
+     처음에 ChartPlaceholder의 어두운 정보 툴팁 색을 그대로 가져다 써서
+     다크모드처럼 보였음) */
+  position: absolute;
+  /* 기준점(top)이 실제 그래프 위쪽(PLOT_TOP)으로 내려온 만큼(JS쪽 수정,
+     2026-09) 여기 간격도 같이 줄여서 툴팁이 카드 위 경계 밖으로 잘려
+     보이지 않게 한다. */
+  transform: translate(-50%, calc(-100% - 6px));
+  z-index: 20;
+  width: max-content;
+  max-width: 220px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid #e4e5e8;
+  color: #111;
+  box-shadow:
+    0 20px 25px -5px rgba(17, 17, 17, 0.1),
+    0 8px 10px -6px rgba(17, 17, 17, 0.1);
+  pointer-events: none;
+}
+.trade-distribution-chart__tooltip-title {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #111;
+  margin-bottom: 6px;
+}
+.trade-distribution-chart__tooltip-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.trade-distribution-chart__tooltip-row
+  + .trade-distribution-chart__tooltip-row {
+  margin-top: 2px;
+}
+.trade-distribution-chart__tooltip-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #6b7280;
+  font-weight: 500;
+}
+.trade-distribution-chart__tooltip-dot {
+  /* 원형 dot 대신 다른 툴팁(ComplexTooltip/VolumeTooltip)과 동일한
+     살짝 라운드 준 사각 칩 스타일로 통일 (2026-09 피드백) */
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+.trade-distribution-chart__tooltip-value {
+  color: #111;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 
 .jeonse-sale-gap-chart {
@@ -2657,7 +2965,7 @@ select:focus-visible {
   animation: slideDown 0.22s ease-out;
 }
 .price-field-label {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 700;
 }
 .price-field input {
@@ -2688,6 +2996,8 @@ select:focus-visible {
   background: var(--color-surface-subtle);
   overflow: hidden;
   animation: slideDown 0.22s ease-out;
+  border-color: transparent;
+  outline-color: transparent;
 }
 .accordion-toggle {
   width: 100%;
@@ -2699,11 +3009,22 @@ select:focus-visible {
   background: transparent;
   text-align: left;
   color: var(--color-ink);
+  border: none;
+  outline-color: transparent;
 }
 .accordion-toggle:hover,
 .accordion-toggle:focus-visible {
   background: var(--color-surface-muted);
-  outline: none;
+  border: none;
+  outline-color: transparent;
+}
+/* 전역 규칙(button:focus)이 :focus-visible뿐 아니라 그냥 :focus에도 초록
+   아웃라인을 그리므로, 마우스로 클릭한 뒤에도(키보드 포커스가 아닌데도)
+   아웃라인이 계속 남아있었다(2026-09 피드백 - "클릭 후 버그처럼 초록
+   줄이 생긴다"). 여기서 일반 :focus만 없애고 :focus-visible(키보드 탐색)
+   표시는 위 규칙 그대로 살아있다. */
+.accordion-toggle:focus {
+  outline-color: transparent;
 }
 .accordion-title {
   font-size: 15px;
@@ -2747,7 +3068,8 @@ select:focus-visible {
 }
 .field-block-label {
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
+  color: var(--color-ink-2);
 }
 .field-row {
   margin-top: 8px;
@@ -2819,22 +3141,55 @@ select:focus-visible {
   gap: 8px;
   flex-wrap: wrap;
 }
+/* 2026-09: 칩마다 <button role="radio">였던 걸 진짜 <input type="radio">
+   + <label>로 바꿨다(ChipGroup.jsx 참고 - 키보드 Tab이 칩 하나하나에
+   다 걸리던 문제). 실제 라디오 인풋은 화면에서 안 보이되(display:none을
+   쓰면 포커스/키보드 이동 자체가 안 되므로 절대 안 됨) 포커스는 그대로
+   받게 시각적으로만 숨기고, 그 옆 <label>을 기존 칩 모양 그대로 보여준다. */
+.chip-option {
+  position: relative;
+}
+.chip-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
 .chip {
   height: 36px;
   padding: 0 16px;
+  display: flex;
+  align-items: center;
   border: none;
   border-radius: var(--radius-full);
   font-size: 13.5px;
   font-weight: 600;
-  background: var(--color-surface-muted);
+  cursor: pointer;
+  /* 기존엔 평소 배경(--color-surface-muted, #ddd 진한 회색)이 호버 배경
+     (--color-border-subtle, #f0f0f2 옅은 회색)보다 더 진해서, 호버했을 때
+     오히려 색이 옅어지며 눈에 덜 띄는 게 거꾸로였다(2026-09 피드백).
+     평소엔 옅게, 호버하면 더 진하게 - 정상적인 방향으로 맞춘다. */
+  background: var(--color-border-subtle);
   color: var(--color-text-secondary);
+  transition: background 0.15s ease;
 }
 .chip:hover {
-  background: var(--color-border-subtle);
+  background: var(--color-surface-muted);
 }
 .chip.is-selected {
   background: var(--color-primary);
   color: var(--color-on-primary);
+}
+/* 실제 포커스는 숨겨진 input이 받으므로, 키보드 탐색 중인지는 그 옆
+   label(형제 요소)에 :focus-visible을 이어붙여서 보여준다. */
+.chip-input:focus-visible + .chip {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 .modal-footer {
@@ -2884,15 +3239,35 @@ select:focus-visible {
   pointer-events: auto;
 }
 .edit-dialog {
+  position: relative;
   width: min(420px, 100%);
-  max-height: calc(100vh - 80px);
+  max-height: 573px;
   overflow-y: auto;
+  overflow-x: hidden;
   background: var(--color-panel);
   border-radius: var(--radius-2xl);
   box-shadow: 0 20px 48px rgba(17, 17, 17, 0.22);
   padding: 26px 26px 22px;
   transform: scale(0.96) translateY(6px);
   transition: transform 0.18s ease;
+}
+.edit-dialog-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.edit-dialog-close:hover {
+  background: var(--color-surface-muted);
 }
 .edit-overlay.is-open .edit-dialog {
   transform: scale(1) translateY(0);
@@ -2904,13 +3279,44 @@ select:focus-visible {
   }
 }
 .edit-dialog-title {
-  font-size: 18px;
-  font-weight: 800;
+  font-size: 16px;
+  font-weight: 700;
 }
 .edit-dialog-name {
-  margin-top: 4px;
-  font-size: 13.5px;
-  color: var(--color-text-subtle);
+  margin-top: 6px;
+  font-size: 14px;
+  color: var(--color-ink);
+}
+.edit-dialog-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.edit-dialog-checklist-btn {
+  border-radius: 8px;
+  background: var(--color-border-subtle);
+  height: 28px;
+  color: var(--color-ink-2);
+  white-space: nowrap;
+  cursor: pointer;
+  border: none;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 6px;
+  margin-right: 24px;
+  margin-top: -8px;
+  padding: 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  transition:
+    background 0.15s,
+    color 0.15s;
+  display: inline-flex;
+}
+.edit-dialog-checklist-btn:hover {
+  background: var(--color-surface-muted);
+  color: var(--color-ink);
 }
 .edit-dialog .price-field {
   margin-top: 20px;
@@ -2944,6 +3350,109 @@ select:focus-visible {
 }
 .edit-dialog-save:hover {
   background: var(--color-primary-hover);
+}
+
+.edit-dialog-panel {
+  animation: editPanelEnterLeft 0.22s ease-out;
+}
+.edit-dialog-panel.is-checklist-panel {
+  animation-name: editPanelEnterRight;
+}
+@keyframes editPanelEnterLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@keyframes editPanelEnterRight {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .edit-dialog-panel {
+    animation: none;
+  }
+}
+.checklist-groups {
+  margin-top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 36px;
+}
+.checklist-group-title {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: none;
+  background: none;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-ink-2);
+  margin-bottom: 4px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--color-border-subtle);
+  cursor: pointer;
+}
+.checklist-group-chevron {
+  flex-shrink: 0;
+  transition: transform 0.15s ease;
+}
+.checklist-group-chevron.is-collapsed {
+  transform: rotate(180deg);
+}
+.checklist-option-row {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  row-gap: 10px;
+  column-gap: 28px;
+}
+.checklist-option-item {
+  position: relative;
+}
+.checklist-option-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.checklist-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13.5px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+.checklist-option:hover {
+  color: var(--color-ink);
+}
+.checklist-option.is-selected {
+  color: var(--color-primary);
+  font-weight: 700;
+}
+.checklist-option-input:focus-visible + .checklist-option {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 3px;
+  border-radius: var(--radius-sm);
 }
 
 @keyframes riseIn {
@@ -3142,9 +3651,24 @@ select:focus-visible {
   line-height: 1.75;
 }
 .news-message {
-  padding: 72px 20px;
-  color: var(--color-text-muted);
+  padding: 60px 20px;
+  font-size: 13px;
+  color: var(--color-ink-2);
   text-align: center;
+}
+/* .news-list/.subscription-list 안의 로딩·에러·빈 상태 문구는 고정
+   padding으로 대충 중앙처럼 보이게 하는 대신, 영역을 꽉 채우고 flex로
+   진짜 상하좌우 중앙 정렬한다 - 카드 높이가 리사이즈나 필터 UI 유무로
+   달라져도 항상 정중앙에 있도록. (인사이트 AI 로딩 문구는
+   .insight-ai-status가 이미 같은 방식으로 처리하고 있다.) */
+.news-list > .news-message,
+.subscription-list > .news-message {
+  flex: 1;
+  margin: 0;
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .news-error {
   color: var(--color-danger);
@@ -3343,13 +3867,12 @@ select:focus-visible {
 }
 
 /* ---------- 그룹 저장/불러오기 (GroupBar) ---------- */
-/* "그룹 저장" 버튼(.group-save-wrap 안의 .nav-icon-btn) 바로 아래에
+/* "그룹" 버튼(.group-save-wrap 안의 .nav-icon-btn) 바로 아래에
    position:absolute로 붙는 말풍선형 드롭다운. .group-save-wrap이 기준점
    (relative)이라 헤더 전체가 아니라 그 버튼 하나를 기준으로 가운데
    정렬된다. 문서 흐름 밖으로 빠지므로(내용 위에 뜸) 독립된 카드 형태로
-   배경·그림자를 준다. 목록은 세로로 한 줄에 하나씩 쌓이고, 팝업 폭은
-   내용에 맞춰 좁게(max-content 기준) 잡아서 옆에 빈 공간이 남지 않게
-   한다. */
+   배경·그림자를 준다. 그룹 목록(보기·추가·이름 수정·삭제)과 새 그룹 만들기가
+   들어가도록 폭을 고정한다. */
 .group-save-wrap {
   position: relative;
 }
@@ -3361,11 +3884,10 @@ select:focus-visible {
   z-index: 40;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  width: max-content;
-  min-width: 150px;
-  max-width: min(220px, 88vw);
+  align-items: stretch;
+  gap: 6px;
+  width: 280px;
+  max-width: calc(100vw - 32px);
   padding: 10px;
   background: var(--color-panel);
   border: 1px solid var(--color-border-strong);
@@ -3399,8 +3921,27 @@ select:focus-visible {
   flex-direction: column;
   gap: 2px;
   width: 100%;
+  max-height: 320px;
+  overflow-y: auto;
 }
 .group-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border-radius: var(--radius-md);
+}
+/* 지금 보고 있는 그룹 - 이름과 후보 수 글자색만 메인색으로 바꾼다(배경·테두리 없음). */
+.group-row.is-active .group-row-name,
+.group-row.is-active .group-row-count {
+  color: var(--color-primary);
+  font-weight: 700;
+}
+/* 마우스로 누른 뒤 남는 전역 포커스 테두리(button:focus)를 그룹 메뉴에서는 없앤다.
+   키보드로 이동할 때(:focus-visible)는 그대로 보인다. */
+.group-bar button:focus:not(:focus-visible) {
+  outline: none;
+}
+.group-row-line {
   display: flex;
   align-items: center;
   gap: 4px;
@@ -3435,6 +3976,12 @@ select:focus-visible {
   font-weight: 600;
   color: var(--color-text-secondary);
 }
+.group-row-count {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--color-text-subtle);
+}
 .group-row-delete {
   flex-shrink: 0;
   width: 24px;
@@ -3461,41 +4008,133 @@ select:focus-visible {
 .group-row-delete:hover svg path {
   stroke: var(--color-danger);
 }
-/* 추가(+) 버튼 - 목록과는 다른 동그란 트리거라 목록 맨 아래에 별도로 둔다. */
-.group-bar-add {
-  width: 36px;
-  height: 36px;
+.group-bar-empty {
+  margin: 6px 8px;
+  font-size: 11.5px;
+  color: var(--color-text-subtle);
+}
+/* 그룹 줄의 "추가" - 카드에서 체크한 후보를 이 그룹에 넣는다. 체크가 없으면 비활성. */
+.group-row-add {
+  flex-shrink: 0;
+  height: 24px;
+  padding: 0 9px;
+  border: none;
+  border-radius: var(--radius-full);
+  background: var(--color-panel);
+  box-shadow: inset 0 0 0 1px var(--color-border-strong);
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+}
+.group-row-add:hover {
+  background: var(--color-surface-muted);
+}
+.group-row-add:disabled {
+  box-shadow: none;
+  background: transparent;
+  color: var(--color-text-faint);
+  cursor: not-allowed;
+}
+/* 그룹 줄의 연필 - 그 자리에서 이름을 고친다(모달 없음). 모양은 삭제 버튼과 같다. */
+.group-row-edit {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px dashed var(--color-border-strong);
+  border: none;
   border-radius: var(--radius-full);
   background: transparent;
-  flex-shrink: 0;
-  margin-top: 2px;
+  opacity: 0.55;
 }
-.group-bar-add:hover {
+.group-row-edit:hover {
+  opacity: 1;
   background: var(--color-surface-subtle);
 }
-
-/* ---------- 그룹명 입력 (SaveGroupModal) ---------- */
-.group-name-field {
-  margin-top: 20px;
+.group-row-edit svg {
+  width: 12px;
+  height: 12px;
 }
-.group-name-field input {
-  width: 100%;
-  height: var(--control-height-md);
-  padding: 0 14px;
-  border: 1px solid var(--color-border-strong);
+/* 그룹 줄의 공유 아이콘 - 그룹 링크를 공유하고 있을 때만 메인색으로 보인다. 누르면 공유를 중지한다. */
+.group-row-share {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--radius-full);
+  background: transparent;
+}
+.group-row-share:hover {
+  background: var(--color-surface-subtle);
+}
+.group-row-share svg {
+  width: 13px;
+  height: 13px;
+}
+.group-row-share svg circle,
+.group-row-share svg path {
+  stroke: var(--color-primary);
+}
+.group-row-share:hover svg circle,
+.group-row-share:hover svg path {
+  stroke: var(--color-danger);
+}
+.group-row-rename {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 8px;
+}
+.group-row-rename svg {
+  flex-shrink: 0;
+}
+.group-row-rename input {
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--color-primary);
   border-radius: var(--radius-md);
   background: var(--color-surface);
-  font-size: 14.5px;
+  font-size: 12px;
+  font-weight: 600;
   color: var(--color-ink);
-}
-.group-name-field input:focus {
   outline: none;
-  border-color: var(--color-primary);
 }
+/* 새 그룹 만들기 - 메뉴 맨 아래. 체크한 후보 수(없으면 빈 그룹)를 함께 보여준다. */
+.group-bar-create {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  height: 36px;
+  margin-top: 2px;
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-ink);
+  font-size: 12px;
+  font-weight: 700;
+}
+.group-bar-create:hover {
+  background: var(--color-surface-subtle);
+}
+.group-bar-create:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+.group-bar-create-hint {
+  font-weight: 500;
+  color: var(--color-text-subtle);
+}
+
 .edit-dialog-save:disabled {
   background: var(--color-surface-muted);
   color: var(--color-text-faint);
@@ -3536,20 +4175,24 @@ select:focus-visible {
   color: var(--color-text-subtle);
 }
 
-/* 로컬 뉴스·청약 연동: 제목 밑줄과 유형 → 지역 → 공고 표시 */
+/* 로컬 뉴스·청약 연동: 유형 → 지역 → 공고 표시. 포커스 링은 리스트
+   항목엔 어색해서 없애고, 클릭/키보드 포커스 모두 제목 글자가 굵어지는
+   걸로 표시한다(호버는 기존 밑줄 그대로 유지). */
 .news-row:hover,
 .news-row:focus,
 .news-row:focus-visible {
   outline: none;
   box-shadow: none;
 }
-.news-row:hover .news-row-title,
-.news-row:focus .news-row-title,
-.news-row:focus-visible .news-row-title {
+.news-row:hover .news-row-title {
   text-decoration: underline;
   text-underline-offset: 3px;
   text-decoration-thickness: 1px;
   text-decoration-color: currentColor;
+}
+.news-row:focus .news-row-title,
+.news-row:focus-visible .news-row-title {
+  font-weight: 700;
 }
 /* 말줄임 영역의 overflow에 호버 밑줄이 잘리지 않도록 공간을 확보한다. */
 .news-row-title {
@@ -3569,7 +4212,7 @@ select:focus-visible {
 .insight-ai-placeholder.is-resizable {
   flex: 0 0 auto;
   min-height: 0;
-  overflow: auto;
+  overflow: hidden;
 }
 .insight-panel-inner > .insight-cards-row {
   flex: 1 0 260px;
@@ -3668,6 +4311,13 @@ select:focus-visible {
   border-radius: 8px;
   box-shadow: 0 6px 18px #0002;
 }
+/* 트리거 버튼 아래쪽에 팝업이 펼쳐질 공간이 부족할 때(SubscriptionInfoCard.jsx의
+   needsDropUp) 위로 펼친다 - 그대로 아래로 펼치면 뷰포트 밖으로 밀려나면서
+   전체 화면에 스크롤이 생긴다. */
+.subscription-region-options.is-drop-up {
+  top: auto;
+  bottom: calc(100% + 6px);
+}
 .subscription-region-option {
   display: block;
   width: 100%;
@@ -3693,15 +4343,49 @@ select:focus-visible {
   margin-bottom: 2px;
 }
 .subscription-region-checkbox {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 8px;
   cursor: pointer;
 }
-.subscription-region-checkbox input {
+/* 네이티브 체크박스는 OS/브라우저마다 모양이 달라 어색해 보였다 - 관심
+   매물 리스트 체크(.interest-checkbox)와 같은 모양(둥근 사각 박스 + 체크
+   아이콘)으로 통일하고, 색만 "1순위" 칩 색(#5498ff)을 쓴다. 크기는 기존
+   네이티브 체크박스와 같은 14px로 유지. 실제 <input>은 접근성/키보드
+   동작을 위해 그대로 두고 시각적으로만 숨긴다(.chip-input과 같은 clip
+   기법). */
+.subscription-checkbox-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.subscription-checkbox-box {
   width: 14px;
   height: 14px;
-  margin: 0;
-  accent-color: var(--color-primary);
-  cursor: pointer;
+  flex-shrink: 0;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-panel);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.subscription-checkbox-box.is-checked {
+  background: #5498ff;
+  border-color: #5498ff;
+}
+.subscription-checkbox-icon {
+  width: 8px;
+  height: 8px;
+}
+.subscription-checkbox-input:focus-visible + .subscription-checkbox-box {
+  outline: 2px solid #5498ff;
+  outline-offset: 2px;
 }
