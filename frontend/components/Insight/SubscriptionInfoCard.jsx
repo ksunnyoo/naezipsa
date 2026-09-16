@@ -89,7 +89,9 @@ export default function SubscriptionInfoCard({ refreshKey = "", referenceSizeId 
   useEffect(() => {
     const controller = new AbortController();
     async function load() {
-      setState({ groups: [], loading: true, error: "" });
+      // 다시 불러오는 동안 이전 그룹을 지우지 않는다 - 지우면 분류 목록이 잠깐
+      // 비어서, 마감제외를 켜고 끄는 사이에 분류 선택 팝업이 빈 채로 보인다.
+      setState(previous => ({ ...previous, loading: true, error: "" }));
       if (!referenceSizeId) {
         setState({ groups: [], loading: false, error: "기준 매물의 지역 정보를 확인할 수 없습니다.", retryable: false });
         return;
