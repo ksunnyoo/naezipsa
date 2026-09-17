@@ -289,7 +289,7 @@ export default function RealTradeDistributionChart({ items }) {
     <ChartPlaceholder
       title="실거래 분포도"
       className="chart-main"
-      infoText="체크한 매물들의 실거래가를 흩어서 보여주고, 입력한 호가와 비교해요."
+      infoText="주변 실제 거래가격과 입력한 호가를 비교해 적정 가격인지 가늠할 수 있어요."
       headerRight={
         <div className="trade-distribution-chart__header-right">
           <div className="trade-distribution-chart__legend">

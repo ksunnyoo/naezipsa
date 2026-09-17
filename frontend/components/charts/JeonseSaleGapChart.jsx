@@ -195,7 +195,7 @@ export default function JeonseSaleGapChart({ items }) {
     <ChartPlaceholder
       title="전세-매매 갭 분석"
       className="jeonse-sale-gap-chart"
-      infoText={"체크한 매물의 매매가 대비 전세가 비율, 전세가율이에요.\n전세가율이 높을수록 매매가와 전세가 차이가 작다는 뜻이에요."}
+      infoText={"매매가와 전세가의 차이를 비교해요.\n전세가율이 높을수록 두 가격의 차이가 작아요."}
     >
       <div className="jeonse-sale-gap-chart__wrap">
         <div className="jeonse-sale-gap-chart__chart">

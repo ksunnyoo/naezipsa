@@ -224,7 +224,7 @@ export default function PriceTrendChart({ items }) {
     <ChartPlaceholder
       title="실거래가 추이"
       className="price-trend-chart"
-      infoText={"체크한 매물들의 매매·전세 실거래가가\n달마다 어떻게 움직였는지 선으로 비교해요."}
+      infoText={"선택한 단지의 매매·전세 실거래가가 월별로 어떻게 움직였는지 비교해요."}
       headerRight={
         <div className="price-trend-chart__header-right">
           <label className="price-trend-chart__period-picker">
