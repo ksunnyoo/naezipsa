@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { useEffect } from "react";
+import useScrollLock from "@/hooks/useScrollLock";
 import NaejipsaApp from "@/components/NaejipsaApp";
 import { getMyProfile, updateMyProfile, getDashboardItems } from "@/lib/api";
 
@@ -20,12 +20,12 @@ vi.mock("@/components/Workspace", () => ({ default: ({ userId, items, onAdd, onE
   {items.length > 0 && <button onClick={() => onEdit(items[0].id)}>후보 편집 열기</button>}
 </div> }));
 vi.mock("@/components/Modal/InterestModal", () => ({ default: function MockInterestModal({ open, onClose }) {
-  // 실제 등록 모달의 scroll lock 해제 순서까지 재현한다.
-  useEffect(() => {
-    if (!open) return;
-    document.body.style.overflow = "hidden";
-    return () => { document.body.style.overflow = ""; };
-  }, [open]);
+  // 배경 스크롤 잠금은 진짜 모달과 같은 훅으로 건다.
+  // 전에는 body.style.overflow를 직접 넣었다 빼는 옛 방식을 흉내 냈는데, 그 방식은
+  // 이제 어디에도 없다. 훅은 열린 개수를 세서 마지막 하나가 닫힐 때만 푸는데, 옛 방식이
+  // 그 개수를 건너뛰고 body를 직접 고치니 훅이 "hidden"을 되돌릴 값으로 기억해버려
+  // 온보딩을 닫아도 배경이 잠긴 채로 남는 일이 간헐적으로 났다.
+  useScrollLock(open);
   return open && <section role="dialog" aria-label="후보 등록">
     <input aria-label="등록 입력" defaultValue="" />
     <button onClick={onClose}>후보 등록 닫기</button>
