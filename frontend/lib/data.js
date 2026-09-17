@@ -90,9 +90,26 @@ export function formatEokLabel(won) {
   return `${truncated.toFixed(1)}억`;
 }
 
-export function dongHoText(item) {
-  const d = (item.dong || "").trim();
-  const h = (item.ho || "").trim();
-  if (!d && !h) return "동/호수 미입력";
-  return (d ? d + "동 " : "") + (h ? h + "호" : "");
+// 후보 카드에서 집을 서로 구분해주는 줄.
+//
+// 같은 단지·평형을 여러 개 담을 수 있다(같은 라인의 다른 층, 같은 층의 다른 동).
+// 그때 이 줄이 사실상 유일한 구분 수단이라, 가진 정보 중 가장 구체적인 것을 쓴다.
+//
+// 동·호수는 등록할 때 모르는 경우가 많다 - 매물을 보고 담는 시점에는 "12층대"까지만
+// 아는 일이 흔하고, 동·호수는 임장을 다녀와야 안다. 그래서 강제로 받지 않고,
+// 호수가 없으면 층이라도 보여준다("12층"만으로도 같은 라인의 다른 집과 구분된다).
+//
+//   101동 1203호  /  101동 12층  /  1203호  /  12층  /  위치 미입력
+export function unitText(item) {
+  const dong = String(item.dong ?? "").trim();
+  const ho = String(item.ho ?? "").trim();
+  const floor = String(item.floor ?? "").trim();
+
+  const parts = [];
+  if (dong) parts.push(`${dong}동`);
+  if (ho) parts.push(`${ho}호`);
+  // 호수는 층을 품고 있다(1203호 = 12층 03호). 호수를 모를 때만 층이 정보를 더한다.
+  if (!ho && floor) parts.push(`${floor}층`);
+
+  return parts.length > 0 ? parts.join(" ") : "위치 미입력";
 }

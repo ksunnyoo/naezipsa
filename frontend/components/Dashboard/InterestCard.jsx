@@ -1,7 +1,7 @@
 "use client";
 
 import { DragHandleIcon, PencilIcon, XIcon } from "../icons";
-import { REGULATIONS, dongHoText } from "@/lib/data";
+import { REGULATIONS, unitText } from "@/lib/data";
 
 // <InterestCard /> : 관심 매물 카드 한 줄(드래그 손잡이 + 카드). 카드 전체
 // (수정/삭제 버튼 영역 제외)를 누르면 대시보드 반영 체크가 토글된다 —
@@ -87,7 +87,7 @@ export default function InterestCard({ item, onToggle, onEdit, onRemove, onDragH
           )}
         </div>
         <div className="interest-card-size">
-          {item.sizeLabel} · <span className="interest-card-dongho">{dongHoText(item)}</span>
+          {item.sizeLabel} · <span className="interest-card-dongho">{unitText(item)}</span>
         </div>
         <div className="interest-card-badges">
           {badges.map((def) => (

@@ -4611,3 +4611,22 @@ select:focus-visible {
   font-weight: 400;
   color: #6b7280;
 }
+
+/* 같은 단지·평형을 담을 때 뜨는 "이미 담은 집인가요?" 확인 창.
+   팝업 껍데기는 매물 수정 창(.edit-dialog)을 그대로 쓰고 본문 글만 따로 둔다. */
+.duplicate-dialog-text {
+  margin: 0;
+  font-size: 14.5px;
+  line-height: 1.65;
+  color: #374151;
+}
+.duplicate-dialog-text b {
+  font-weight: 600;
+  color: var(--main, #2f6df6);
+}
+.duplicate-dialog-hint {
+  margin: 10px 0 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #6b7280;
+}
