@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CloseIcon, GoogleIcon, KakaoIcon, LoginIcon } from "../icons";
 import { supabase } from "@/lib/supabaseClient";
+import useScrollLock from "@/hooks/useScrollLock";
 
 // 2026-09: 로그인/회원가입을 Supabase Auth에 실제로 연결하면서, 과거에
 // 로그인/중복확인을 흉내내던 하드코딩 아이디 목록(VALID_IDS)은 제거했다.
@@ -288,15 +289,8 @@ export default function AuthModal({ open, onClose, onSignupComplete }) {
     });
   }, [open, screen, signupStep]);
 
-  useEffect(() => {
-    if (!open) return;
-
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = previousOverflow;
-    };
-  }, [open]);
+  // 배경 스크롤 잠금은 공용 훅이 맡는다(팝업이 겹쳐도 어긋나지 않게).
+  useScrollLock(open);
 
   async function handleSubmit(event) {
     event.preventDefault();

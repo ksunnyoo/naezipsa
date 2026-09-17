@@ -53,6 +53,7 @@ export default function EditListingDialog({
   open,
   item,
   initialChecklist,
+  guest,
   group,
   profile,
   onSave,
@@ -244,6 +245,13 @@ export default function EditListingDialog({
             </>
           ) : (
             <>
+              {/* 게스트는 서버에 저장할 수 없다. 18개를 다 채운 뒤에 알면 늦으므로
+                  체크리스트를 열자마자 맨 위에서 알려준다. */}
+              {guest && (
+                <p className="checklist-guest-note">
+                  로그인하면 임장 체크리스트가 저장돼요. 지금은 새로고침하면 사라집니다.
+                </p>
+              )}
               <InspectionChecklist values={checklist} onChange={updateChecklistField} />
               <div className="field-block checklist-rating">
                 <div className="field-block-label">

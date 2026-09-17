@@ -93,6 +93,19 @@ describe("종합 평점 (EditListingDialog)", () => {
     expect(rating).toBe(5);
   });
 
+  it("비로그인이면 체크리스트가 저장되지 않는다고 미리 알려준다", () => {
+    renderDialog({ guest: true });
+    fireEvent.click(screen.getByRole("button", { name: "임장 체크리스트" }));
+    // 18개를 다 채운 뒤에 알면 늦으므로 맨 위에서 알린다.
+    expect(screen.getByText(/로그인하면 임장 체크리스트가 저장돼요/)).toBeTruthy();
+  });
+
+  it("로그인 상태에서는 그 안내를 띄우지 않는다", () => {
+    renderDialog();
+    fireEvent.click(screen.getByRole("button", { name: "임장 체크리스트" }));
+    expect(screen.queryByText(/로그인하면 임장 체크리스트가 저장돼요/)).toBeNull();
+  });
+
   it("저장해둔 값으로 화면을 채우고 점수를 다시 계산한다", () => {
     renderDialog({ initialChecklist: { transport: 1 } });
     fireEvent.click(screen.getByRole("button", { name: "임장 체크리스트" }));
