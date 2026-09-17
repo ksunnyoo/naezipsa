@@ -9,9 +9,10 @@ import AuthModal from "./Modal/AuthModal";
 import ProfileOnboardingModal from "./Modal/ProfileOnboardingModal";
 import useProfileOnboarding from "@/hooks/useProfileOnboarding";
 import ImportShareModal from "./Modal/ImportShareModal";
+import DuplicateUnitDialog from "./Modal/DuplicateUnitDialog";
 import Toast from "./Toast";
 import useToast from "@/hooks/useToast";
-import { MAX_DASHBOARD_GROUPS, MAX_DASHBOARD_ITEMS } from "@/lib/data";
+import { MAX_DASHBOARD_GROUPS, MAX_DASHBOARD_ITEMS, unitText } from "@/lib/data";
 import { supabase } from "@/lib/supabaseClient";
 import {
   getDashboardItems,
@@ -152,6 +153,9 @@ export default function NaejipsaApp() {
   const [sharePreviewItems, setSharePreviewItems] = useState([]);
   const [sharePreviewGroupName, setSharePreviewGroupName] = useState(null);
   const [importModalOpen, setImportModalOpen] = useState(false);
+  // 담으려는 집이 이미 담아둔 후보와 카드에서 똑같이 보일 때만 채워진다.
+  // { item: 담으려던 값, twinId: 똑같이 보이는 기존 후보의 화면용 id }
+  const [duplicatePrompt, setDuplicatePrompt] = useState(null);
 
   // 늦은 프로필 조회가 기존 후보 입력창·그룹/공유 팝업 위에 새 모달을 겹쳐 열지
   // 않게 한다. 그룹·공유 팝업 state를 참조하므로 그 선언 뒤에 둔다.
@@ -289,7 +293,8 @@ export default function NaejipsaApp() {
     editingItemId != null ||
     onboardingOpen ||
     profileEditorOpen ||
-    importModalOpen;
+    importModalOpen ||
+    duplicatePrompt != null;
 
   // 그룹을 보고 있으면 그 그룹에 든 후보만 보여준다(순서는 전체 후보에서 정한 순서).
   // 후보 자체는 dashboardItems에 그대로 있다.
@@ -914,6 +919,26 @@ export default function NaejipsaApp() {
       return;
     }
 
+    // 카드에 똑같이 보일 후보가 이미 있으면 담기 전에 묻는다. 같은 단지·평형이어도
+    // "101동 1203호"와 "12층"처럼 구분되면 묻지 않고 그냥 담는다 - 화면에서 구분되는
+    // 기준과 물어보는 기준을 같은 함수(unitText)로 맞춰, 둘이 어긋나지 않게 한다.
+    const twin = dashboardItems.find(
+      (it) =>
+        it.sizeId != null &&
+        it.sizeId === itemData.sizeId &&
+        unitText(it) === unitText(itemData),
+    );
+    if (twin) {
+      setDuplicatePrompt({ item: itemData, twinId: twin.id });
+      return;
+    }
+
+    await addCandidate(itemData);
+  }
+
+  // 실제로 담는 부분. 새 후보의 화면용 id를 돌려준다 - 중복 확인에서 "다른 집이에요"를
+  // 고르면 담은 뒤 바로 그 후보의 수정 창을 열어야 하기 때문이다.
+  async function addCandidate(itemData) {
     // 로그인 상태면 서버에도 저장한다 - 실패하면 로컬에도 추가하지 않는다
     // (화면엔 보이는데 서버엔 없는 상태가 되는 걸 막기 위해).
     let backendId = null;
@@ -928,16 +953,17 @@ export default function NaejipsaApp() {
         setDashboardUserId(user.id);
       } catch {
         toast.show("관심 매물을 저장하지 못했어요. 잠시 후 다시 시도해주세요.");
-        return;
+        return null;
       }
     }
 
     const nextSeq = dashboardItemSeq + 1;
+    const localId = "item-" + nextSeq;
     setDashboardItemSeq(nextSeq);
     setDashboardItems((items) => [
       ...items,
       {
-        id: "item-" + nextSeq,
+        id: localId,
         backendId,
         name: itemData.name,
         sizeLabel: itemData.sizeLabel,
@@ -962,10 +988,28 @@ export default function NaejipsaApp() {
         applyGroup(await addGroupItems(shownGroup.id, [backendId]));
       } catch (err) {
         toast.show(`전체 후보에는 추가했지만 그룹에는 넣지 못했어요. ${err.message}`);
-        return;
+        return localId;
       }
     }
     toast.show(`${itemData.name} ${itemData.sizeLabel} 매물이 추가되었습니다`);
+    return localId;
+  }
+
+  // "이미 담은 집이에요" - 새로 담지 않고 그 후보의 수정 창을 연다.
+  function handleDuplicateSame() {
+    const twinId = duplicatePrompt?.twinId;
+    setDuplicatePrompt(null);
+    if (twinId) setEditingItemId(twinId);
+  }
+
+  // "다른 집이에요" - 담고 나서 바로 수정 창을 열어 동·호수나 층을 넣게 한다.
+  // 거기서 아무것도 안 넣고 닫아도 담긴 채로 남는다(막지 않는다).
+  async function handleDuplicateDifferent() {
+    const pending = duplicatePrompt?.item;
+    setDuplicatePrompt(null);
+    if (!pending) return;
+    const addedId = await addCandidate(pending);
+    if (addedId) setEditingItemId(addedId);
   }
 
   return (
@@ -1069,6 +1113,15 @@ export default function NaejipsaApp() {
         groupName={sharePreviewGroupName}
         onImport={handleImportShare}
         onCancel={handleImportCancel}
+      />
+      <DuplicateUnitDialog
+        open={duplicatePrompt != null}
+        name={duplicatePrompt?.item.name ?? ""}
+        sizeLabel={duplicatePrompt?.item.sizeLabel ?? ""}
+        unit={duplicatePrompt ? unitText(duplicatePrompt.item) : ""}
+        onSame={handleDuplicateSame}
+        onDifferent={handleDuplicateDifferent}
+        onCancel={() => setDuplicatePrompt(null)}
       />
 
       <Toast message={toast.message} visible={toast.visible} />
