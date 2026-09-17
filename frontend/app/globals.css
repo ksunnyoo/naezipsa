@@ -4929,3 +4929,111 @@ select:focus-visible {
   font-variant-numeric: tabular-nums;
   color: #6b7280;
 }
+
+/* 그룹 칩 - 지금 어느 그룹을 보고 있는지, 걸러진 목록 바로 위에서 알려준다.
+   ✕ 를 누르면 전체 후보로 돌아간다(Esc도 같다). */
+.group-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  padding: 6px 6px 6px 10px;
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-primary) 32%, transparent);
+  font-size: 12px;
+  color: var(--color-ink);
+}
+.group-chip-name {
+  font-weight: 600;
+  /* 그룹 이름은 30자까지 받는데 목록 폭은 220~270px뿐이다. 넘치면 말줄임한다. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.group-chip-count {
+  flex-shrink: 0;
+  color: var(--color-text-secondary);
+}
+.group-chip-exit {
+  flex-shrink: 0;
+  margin-left: auto;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  padding: 0;
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+.group-chip-exit:hover {
+  background: var(--color-surface);
+  color: var(--color-ink);
+}
+
+/* 6개를 다 채웠을 때 - 칸을 숨기지 않고 왜 못 넣는지 보여준다. */
+.dashboard-add-slot:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+.dashboard-add-slot:disabled:hover {
+  background: transparent;
+  border-color: var(--color-border-strong);
+}
+
+/* "이 그룹에 넣기" 창 - 이미 담아둔 후보 중 이 그룹에 없는 것만 고른다. */
+.group-add-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+.group-add-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+.group-add-row:hover {
+  background: var(--color-surface-subtle);
+}
+.group-add-name {
+  font-weight: 600;
+  font-size: 13px;
+}
+.group-add-sub {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+.group-add-empty {
+  margin: 0;
+  padding: 12px 2px;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+.group-add-new {
+  margin-top: 8px;
+  width: 100%;
+  padding: 10px;
+  border: 1.5px dashed var(--color-border-strong);
+  border-radius: var(--radius-lg);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+}
+.group-add-new:hover {
+  background: var(--color-surface-subtle);
+  color: var(--color-ink);
+}

@@ -9,6 +9,7 @@ import MainHeroOverlay from "./Hero/MainHeroOverlay";
 export default function Workspace({
   items,
   totalCount,
+  group,
   insightItems,
   userId,
   profile,
@@ -17,6 +18,8 @@ export default function Workspace({
   onRemove,
   onReorder,
   onAdd,
+  onAddToGroup,
+  onExitGroup,
   heroCleared,
   showHeroCloseBtn,
   onHeroClose,
@@ -28,6 +31,7 @@ export default function Workspace({
       <Dashboard
         items={items}
         totalCount={totalCount}
+        group={group}
         insightItems={insightItems}
         userId={userId}
         profile={profile}
@@ -36,6 +40,8 @@ export default function Workspace({
         onRemove={onRemove}
         onReorder={onReorder}
         onAdd={onAdd}
+        onAddToGroup={onAddToGroup}
+        onExitGroup={onExitGroup}
         activeContentTab={activeContentTab}
         dragDisabled={dragDisabled}
       />

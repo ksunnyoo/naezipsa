@@ -252,3 +252,101 @@ it("그룹을 보는 중에 카드를 빼면 그룹에서만 빠지고 후보는
   expect(cardNames()).toEqual(ALL);
   expectCandidatesUntouched();
 });
+
+// ── 그룹 화면과 전체 후보 화면 사이를 오가는 길 (2026-09-17) ──────────────────
+// 전에는 "지금 그룹을 보고 있다"는 표시가 그룹 메뉴 안에만 있어서, 메뉴를 닫으면
+// 목록이 줄어든 것만 보이고 이유를 알 수 없었다. 나가려면 메뉴를 다시 열어
+// 같은 그룹을 한 번 더 눌러야 했고, 새로고침하면 그냥 풀렸다.
+
+const exitChip = () =>
+  screen.queryByRole("button", { name: '"학군 후보" 그룹에서 나가 전체 후보 보기' });
+
+it("그룹을 보는 중에는 목록 맨 위 칩으로 알려주고, ✕로 전체 후보에 돌아온다", async () => {
+  await renderLoggedIn();
+  expect(exitChip()).toBeNull(); // 전체 후보 화면에는 칩이 없다
+
+  await viewSchoolGroup();
+  // 메뉴를 닫아도 어느 그룹을 보고 있는지 계속 보인다.
+  fireEvent.keyDown(document, { key: "Escape" });
+  expect(exitChip()).toBeTruthy();
+  expect(document.querySelector(".group-chip-name").textContent).toBe("학군 후보");
+  expect(document.querySelector(".group-chip-count").textContent).toBe("1개");
+
+  fireEvent.click(exitChip());
+  await waitFor(() => expect(cardNames()).toEqual(ALL));
+  expect(exitChip()).toBeNull();
+  expectCandidatesUntouched();
+});
+
+it("Esc로도 전체 후보로 돌아온다 - 단, 열려 있는 창이 먼저다", async () => {
+  await renderLoggedIn();
+  await viewSchoolGroup();
+
+  // 그룹 메뉴가 열려 있으면 Esc는 메뉴부터 닫는다(그룹은 그대로).
+  fireEvent.keyDown(document, { key: "Escape" });
+  expect(cardNames()).toEqual(["나단지"]);
+
+  fireEvent.keyDown(document, { key: "Escape" });
+  await waitFor(() => expect(cardNames()).toEqual(ALL));
+});
+
+it("보던 그룹이 주소에 남아 새로고침해도 유지된다", async () => {
+  await renderLoggedIn();
+  await viewSchoolGroup();
+  expect(new URL(window.location.href).searchParams.get("group")).toBe("7");
+
+  // 새로고침 = 같은 주소에서 처음부터 다시 그리기.
+  cleanup();
+  render(<NaejipsaApp />);
+  await waitFor(() => expect(cardNames()).toEqual(["나단지"]));
+  expect(exitChip()).toBeTruthy();
+});
+
+it("주소의 그룹이 지워졌으면 조용히 전체 후보로 두고 주소도 지운다", async () => {
+  window.history.replaceState({}, "", "/?group=999");
+  await renderLoggedIn();
+
+  await waitFor(() =>
+    expect(new URL(window.location.href).searchParams.has("group")).toBe(false),
+  );
+  expect(cardNames()).toEqual(ALL);
+});
+
+it("그룹 화면에서 이미 담아둔 후보를 그 그룹에 넣을 수 있다", async () => {
+  await renderLoggedIn();
+  await viewSchoolGroup();
+  fireEvent.keyDown(document, { key: "Escape" }); // 그룹 메뉴 닫기
+
+  // 전체 후보 화면의 "매물 추가하기"가 그룹 화면에서는 "이 그룹에 넣기"가 된다.
+  expect(screen.queryByRole("button", { name: /매물 추가하기/ })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: /이 그룹에 넣기/ }));
+
+  // 이미 그룹에 든 나단지는 고를 수 없고, 나머지만 나온다.
+  const picker = screen.getByRole("dialog", { name: "이 그룹에 넣기" });
+  expect([...picker.querySelectorAll(".group-add-name")].map((n) => n.textContent))
+    .toEqual(["가단지", "다단지"]);
+
+  fireEvent.click(screen.getByLabelText(/가단지/));
+  fireEvent.click(screen.getByRole("button", { name: "1개 담기" }));
+
+  await waitFor(() => expect(addGroupItems).toHaveBeenCalledWith(7, [11]));
+  await waitFor(() => expect(cardNames()).toEqual(["가단지", "나단지"]));
+  expectCandidatesUntouched();
+});
+
+it("후보를 6개 다 채우면 추가 칸을 숨기지 않고 이유를 보여준다", async () => {
+  // 전에는 말없이 사라져서, 그룹에 3개만 보이는 화면에서 고장으로 보였다.
+  getDashboardItems.mockResolvedValue({
+    items: Array.from({ length: 6 }, (_, i) => ({
+      id: 21 + i, size_id: 300 + i, complex_name: `단지${i}`,
+      representative_area: 84.9, checked: true,
+    })),
+  });
+  auth.session = { user: { id: "a" } };
+  render(<NaejipsaApp />);
+  await screen.findByText("단지0");
+
+  const slot = screen.getByRole("button", { name: /후보는 6개까지예요/ });
+  expect(slot.disabled).toBe(true);
+  expect(screen.queryByRole("button", { name: /매물 추가하기/ })).toBeNull();
+});
