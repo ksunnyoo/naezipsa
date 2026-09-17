@@ -13,6 +13,76 @@ import {
 import ChartPlaceholder from "./ChartPlaceholder";
 import { getMacroIndices } from "@/lib/api";
 
+// 다른 실데이터 차트 툴팁(ComplexTooltip/VolumeTooltip/CustomTooltip)과
+// 동일한 카드 스타일 + dot 칩 + 라벨/값 정렬 컨벤션으로 맞춘 커스텀 툴팁
+// (2026-09 피드백 - 이 차트만 Recharts 기본 Tooltip 스타일이라 글자
+// 크기/여백이 다른 차트들과 달랐음).
+function MacroTooltip({ active, payload, label }) {
+  if (!active || !payload?.length) return null;
+  const value = payload[0]?.value;
+  if (value == null) return null;
+
+  return (
+    <div
+      style={{
+        background: "rgba(255,255,255,0.96)",
+        border: "1px solid #e4e5e8",
+        borderRadius: 10,
+        padding: "10px 12px",
+        boxShadow:
+          "0 20px 25px -5px rgba(17,17,17,0.1), 0 8px 10px -6px rgba(17,17,17,0.1)",
+        minWidth: 130,
+        fontSize: "0.75rem",
+      }}
+    >
+      <div
+        style={{
+          fontSize: "0.7812rem",
+          color: "#111",
+          fontWeight: 700,
+          marginBottom: 6,
+        }}
+      >
+        {label}
+      </div>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 14,
+          fontSize: "0.75rem",
+          lineHeight: 1.6,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+          <span
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: 2,
+              flexShrink: 0,
+              background: "var(--color-primary)",
+            }}
+          />
+          <span style={{ color: "#6b7280", fontWeight: 500 }}>
+            매매가격지수
+          </span>
+        </div>
+        <span
+          style={{
+            color: "#111",
+            fontWeight: 700,
+            fontVariantNumeric: "tabular-nums",
+          }}
+        >
+          {Number(value).toFixed(1)}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 // 거시 데이터 — 매매가격지수(한국부동산원 R-ONE, 월단위) 실거래 데이터 연결
 // (2026-09, B-10 GET /macro/indices). 다른 차트들과 달리 매물별 데이터가
 // 아니라 전국 단위 지표라 items(체크된 매물)엔 의존하지 않고, 기간(3/12/36
@@ -236,19 +306,7 @@ export default function MacroDataChart() {
                     stroke: "var(--color-border-strong)",
                     strokeWidth: 1,
                   }}
-                  contentStyle={{
-                    fontSize: 14,
-                    borderRadius: 12,
-                    border: "1px solid var(--color-border)",
-                    background: "rgba(255,255,255,0.96)",
-                    boxShadow: "0 8px 20px rgba(17,17,17,0.08)",
-                  }}
-                  labelStyle={{ fontSize: 12, fontWeight: 700 }}
-                  itemStyle={{ fontSize: 12, color: "#374151" }}
-                  formatter={(value) => [
-                    `${Number(value).toFixed(1)}`,
-                    "매매가격지수",
-                  ]}
+                  content={<MacroTooltip />}
                 />
                 <Area
                   type="monotone"

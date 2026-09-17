@@ -61,15 +61,22 @@ function CustomTooltip({ active, payload, label, itemsById }) {
     <div
       style={{
         background: "rgba(255,255,255,0.96)",
-        border: "1px solid #e5e7eb",
+        border: "1px solid #e4e5e8",
         borderRadius: 10,
-        boxShadow: "0 4px 18px rgba(17, 24, 39, 0.08)",
-        padding: "8px 10px",
+        boxShadow:
+          "0 20px 25px -5px rgba(17,17,17,0.1), 0 8px 10px -6px rgba(17,17,17,0.1)",
+        padding: "10px 12px",
         fontSize: "0.75rem",
-        color: "#374151",
       }}
     >
-      <div style={{ fontWeight: 700, marginBottom: 6, color: "#111827" }}>
+      <div
+        style={{
+          fontSize: "0.7812rem",
+          fontWeight: 700,
+          marginBottom: 6,
+          color: "#111",
+        }}
+      >
         {label}
       </div>
       {payload
@@ -81,25 +88,33 @@ function CustomTooltip({ active, payload, label, itemsById }) {
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
-              gap: 12,
+              gap: 14,
+              fontSize: "0.75rem",
+              lineHeight: 1.6,
               marginTop: 4,
             }}
           >
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
               <span
                 style={{
                   width: 8,
                   height: 8,
-                  borderRadius: "50%",
-                  background: entry.stroke || entry.color || "#374151",
-                  display: "inline-block",
+                  borderRadius: 2,
+                  flexShrink: 0,
+                  background: entry.stroke || entry.color || "#6b7280",
                 }}
               />
-              <span style={{ color: "#374151" }}>
+              <span style={{ color: "#6b7280", fontWeight: 500 }}>
                 {itemsById.get(entry.dataKey)?.name ?? entry.dataKey}
               </span>
             </div>
-            <span style={{ color: "#111827", fontWeight: 700 }}>
+            <span
+              style={{
+                color: "#111",
+                fontWeight: 700,
+                fontVariantNumeric: "tabular-nums",
+              }}
+            >
               {formatPriceLabel(entry.value)}
             </span>
           </div>

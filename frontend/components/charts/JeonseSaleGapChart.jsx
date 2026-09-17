@@ -66,15 +66,22 @@ function ComplexTooltip({ active, payload, label }) {
       style={{
         background: "rgba(255,255,255,0.96)",
         border: "1px solid #e4e5e8",
-        borderRadius: 8,
-        padding: "6px 10px",
+        borderRadius: 10,
+        padding: "10px 12px",
         boxShadow:
           "0 20px 25px -5px rgba(17,17,17,0.1), 0 8px 10px -6px rgba(17,17,17,0.1)",
         minWidth: 130,
-        fontSize: 12,
+        fontSize: "0.75rem",
       }}
     >
-      <div style={{ color: "#111", fontWeight: 700, padding: "2px 0 4px" }}>
+      <div
+        style={{
+          fontSize: "0.7812rem",
+          color: "#111",
+          fontWeight: 700,
+          marginBottom: 6,
+        }}
+      >
         {label}
       </div>
       {rows.map((row) => (
@@ -84,11 +91,13 @@ function ComplexTooltip({ active, payload, label }) {
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            gap: 8,
+            gap: 14,
+            fontSize: "0.75rem",
+            lineHeight: 1.6,
             padding: "3px 0",
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
             <span
               style={{
                 width: 8,
@@ -105,10 +114,8 @@ function ComplexTooltip({ active, payload, label }) {
           <span
             style={{
               color: "#111",
-              fontWeight: 600,
+              fontWeight: 700,
               fontVariantNumeric: "tabular-nums",
-              fontFamily:
-                "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
             }}
           >
             {formatKoreanMoney(row.value)}
