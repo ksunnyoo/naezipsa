@@ -4717,19 +4717,24 @@ select:focus-visible {
 
 /* 그룹 메뉴의 "점수" 버튼과 펼쳐지는 가중치 편집 영역. */
 .group-row-scoring {
-  flex: none;
-  padding: 2px 8px;
-  border: 1px solid var(--line, #e5e7eb);
-  border-radius: 999px;
-  background: transparent;
-  font-size: 12px;
-  color: #4b5563;
+  flex-shrink: 0;
+  height: 24px;
+  padding: 0 9px;
+  border: none;
+  border-radius: var(--radius-full);
+  background: var(--color-panel);
+  box-shadow: inset 0 0 0 1px var(--color-border-strong);
+  color: var(--color-text-secondary);
+  font-size: 0.6875rem;
+  font-weight: 700;
   cursor: pointer;
 }
+.group-row-scoring:hover {
+  background: var(--color-surface-muted);
+}
 .group-row-scoring[aria-expanded="true"] {
-  border-color: var(--color-primary);
+  box-shadow: inset 0 0 0 1px var(--color-primary);
   color: var(--color-primary);
-  font-weight: 600;
 }
 .group-scoring {
   padding: 10px 12px 12px;
