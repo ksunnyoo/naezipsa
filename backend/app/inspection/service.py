@@ -72,6 +72,33 @@ def get_inspection(db: Session, user_id, property_id: int) -> InspectionRecord:
     return InspectionRecord.model_validate(record)
 
 
+def delete_inspection(db: Session, user_id, property_id: int) -> bool:
+    """임장 기록을 지운다. 지울 게 있었으면 True.
+
+    체크리스트를 모두 비우고 저장하면 화면이 이걸 부른다. 저장을 건너뛰기만 하면
+    서버에 남은 옛 기록이 그대로 살아 있어, 다시 열었을 때 지운 줄 알았던 점수가
+    되살아난다.
+    """
+    try:
+        item = db.execute(
+            select(DashboardItem)
+            .where(DashboardItem.id == property_id, DashboardItem.user_id == user_id)
+            .with_for_update()
+        ).scalar_one_or_none()
+        if item is None:
+            raise HTTPException(404, "해당 후보 매물을 찾을 수 없습니다.")
+        record = db.scalar(
+            select(PropertyInspection).where(PropertyInspection.property_id == item.id)
+        )
+        if record is not None:
+            db.delete(record)
+        db.commit()
+        return record is not None
+    except Exception:
+        db.rollback()
+        raise
+
+
 def save_inspection(db: Session, user_id, property_id: int, payload: InspectionCreate):
     """후보당 1건을 저장한다. 처음이면 새로 만들고, 이미 있으면 고쳐 쓴다.
 

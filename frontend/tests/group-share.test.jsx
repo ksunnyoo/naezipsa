@@ -149,7 +149,7 @@ it("공유 중인 그룹의 공유 아이콘을 누르면 그 그룹 링크를 �
   expect(await screen.findByText("공유를 중지했어요. 보낸 링크로는 더 이상 볼 수 없어요")).toBeTruthy();
 });
 
-it("그룹 링크를 열면 로그인 없이 그룹 이름과 동·호수 미리보기가 뜨고, 주소에서 토큰을 지운다", async () => {
+it("그룹 링크를 열면 로그인 없이 미리보기가 뜨고, 닫은 뒤에야 주소에서 토큰을 지운다", async () => {
   window.history.replaceState({}, "", "/?groupShare=abc");
   getSharedGroup.mockResolvedValue({ name: "학군 후보", count: 1, items: [SHARED_ITEM] });
 
@@ -160,6 +160,11 @@ it("그룹 링크를 열면 로그인 없이 그룹 이름과 동·호수 미리
   expect(dialog.textContent).toContain("101동 1203호 · 84.9㎡");
   expect(getSharedGroup).toHaveBeenCalledWith("abc");
   expect(getDashboardShare).not.toHaveBeenCalled();
+  // 미리보기가 떠 있는 동안에는 토큰을 남겨둔다 - 새로고침하면 그룹의 지금 후보를
+  // 다시 불러와야 하기 때문이다. 열자마자 지우면 링크를 다시 붙여넣어야 최신이 보인다.
+  expect(window.location.search).toBe("?groupShare=abc");
+
+  fireEvent.click(screen.getByRole("button", { name: "닫기" }));
   await waitFor(() => expect(window.location.search).toBe(""));
   expect(createDashboardItem).not.toHaveBeenCalled();
 });

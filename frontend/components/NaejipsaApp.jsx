@@ -31,6 +31,7 @@ import {
   createGroupShareLink,
   revokeGroupShareLinks,
   getSharedGroup,
+  deleteInspection,
   getInspection,
   getInspections,
   saveInspection,
@@ -65,6 +66,19 @@ function nextGroupName(groups) {
 function checklistKey(item) {
   if (!item) return null;
   return item.backendId != null ? `srv-${item.backendId}` : `loc-${item.id}`;
+}
+
+// 주소에서 공유 토큰(?share= / ?groupShare=)을 지운다.
+//
+// 미리보기를 닫은 뒤, 또는 열리지 않는 링크일 때만 부른다. 링크를 열자마자 지우면
+// 새로고침했을 때 불러올 토큰이 없어서, 받은 사람이 링크를 다시 붙여넣기 전까지
+// 그룹의 최신 내용을 볼 수 없다 - 그룹 링크는 열 때마다 지금 후보를 보여주는 게 핵심이다.
+function clearShareTokenFromUrl() {
+  const url = new URL(window.location.href);
+  if (!url.searchParams.has("share") && !url.searchParams.has("groupShare")) return;
+  url.searchParams.delete("share");
+  url.searchParams.delete("groupShare");
+  window.history.replaceState({}, "", url);
 }
 
 // 목록을 주어진 id 순서로 줄 세운다(key: 로컬 id "id" 또는 서버 id "backendId").
@@ -257,13 +271,8 @@ export default function NaejipsaApp() {
         toast.show(groupToken
           ? "존재하지 않거나 공유가 중지된 그룹 링크예요."
           : "존재하지 않거나 만료된 공유 링크예요.");
-      })
-      .finally(() => {
-        // 새로고침해도 다시 뜨지 않도록 쿼리스트링에서 지운다.
-        const url = new URL(window.location.href);
-        url.searchParams.delete("share");
-        url.searchParams.delete("groupShare");
-        window.history.replaceState({}, "", url);
+        // 열리지 않는 링크는 바로 지운다. 남겨두면 새로고침할 때마다 같은 안내가 뜬다.
+        clearShareTokenFromUrl();
       });
 
     return () => {
@@ -692,6 +701,8 @@ export default function NaejipsaApp() {
     setImportModalOpen(false);
     setSharePreviewItems([]);
     setSharePreviewGroupName(null);
+    // 토큰은 여기서(미리보기를 닫은 뒤) 지운다. 이유는 clearShareTokenFromUrl 주석 참고.
+    clearShareTokenFromUrl();
   }
 
   // 체크박스(비교 차트·AI 분석에 포함할지) 토글. 로그인 상태면 서버에도 저장해
@@ -856,6 +867,21 @@ export default function NaejipsaApp() {
           setItemChecklists((prev) => ({ ...prev, [key]: fromInspectionRecord(saved) }));
         } catch {
           toast.show("체크리스트를 저장하지 못했어요. 잠시 후 다시 시도해주세요.");
+          return;
+        }
+      } else if (itemChecklists[key]) {
+        // 체크를 모두 비운 경우. 저장을 건너뛰기만 하면 서버에 남은 옛 기록이 그대로라,
+        // 다시 열었을 때 지운 줄 알았던 점수가 되살아난다. 그래서 기록을 지운다.
+        // (임장 메모도 그 기록에 함께 들어 있어 같이 지워진다.)
+        try {
+          await deleteInspection(item.backendId);
+          setItemChecklists((prev) => {
+            const next = { ...prev };
+            delete next[key];
+            return next;
+          });
+        } catch {
+          toast.show("체크리스트를 지우지 못했어요. 잠시 후 다시 시도해주세요.");
           return;
         }
       }

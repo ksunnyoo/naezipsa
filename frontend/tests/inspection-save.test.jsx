@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import EditListingDialog from "@/components/EditListingDialog";
 import NaejipsaApp from "@/components/NaejipsaApp";
-import { getDashboardItems, getInspection, getMyProfile, saveInspection, updateDashboardItemDetails } from "@/lib/api";
+import { deleteInspection, getDashboardItems, getInspection, getMyProfile, saveInspection, updateDashboardItemDetails } from "@/lib/api";
 
 const auth = vi.hoisted(() => ({ callback: null, session: null }));
 vi.mock("@/lib/supabaseClient", () => ({ supabase: { auth: {
@@ -19,7 +19,8 @@ vi.mock("@/lib/api", () => ({
   renameGroup: vi.fn(), deleteGroup: vi.fn(), addGroupItems: vi.fn(), removeGroupItem: vi.fn(),
   createDashboardShare: vi.fn(), getDashboardShare: vi.fn(), createGroupShareLink: vi.fn(),
   revokeGroupShareLinks: vi.fn(), getSharedGroup: vi.fn(),
-  getInspection: vi.fn(), saveInspection: vi.fn(),
+  getInspection: vi.fn(), saveInspection: vi.fn(), getInspections: vi.fn(),
+  deleteInspection: vi.fn(), updateGroupScoring: vi.fn(),
 }));
 // 수정 버튼만 노출한다(실제 Workspace는 차트까지 그려서 이 테스트와 무관하다).
 vi.mock("@/components/Workspace", () => ({ default: ({ items, onEdit }) => <ul>
@@ -157,5 +158,37 @@ describe("서버 저장 배선 (NaejipsaApp)", () => {
     await openChecklist("단지1 수정");
     expect(screen.getAllByLabelText("좋음")[0].checked).toBe(false);
     expect(screen.getByText("항목을 체크하면 종합 평점이 계산돼요.")).toBeTruthy();
+  });
+
+  it("체크를 모두 비우고 저장하면 저장돼 있던 기록을 지운다", async () => {
+    getInspection.mockResolvedValue(record()); // 교통 두 항목이 "좋음"으로 저장돼 있다
+    deleteInspection.mockResolvedValue({ deleted: true });
+    render(<NaejipsaApp />);
+    await login();
+
+    await openChecklist("단지1 수정");
+    // 같은 값을 다시 누르면 해제된다. 저장돼 있던 두 항목을 모두 비운다.
+    fireEvent.click(screen.getAllByLabelText("좋음")[0]);
+    fireEvent.click(screen.getAllByLabelText("좋음")[1]);
+    expect(screen.getByText("항목을 체크하면 종합 평점이 계산돼요.")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "저장" }));
+
+    // 저장만 건너뛰면 서버에 남은 옛 점수가 그대로라 다시 열 때 되살아난다.
+    await waitFor(() => expect(deleteInspection).toHaveBeenCalledWith(11));
+    expect(saveInspection).not.toHaveBeenCalled();
+  });
+
+  it("원래 기록이 없던 후보는 지우기를 보내지 않는다", async () => {
+    getInspection.mockResolvedValue(null);
+    render(<NaejipsaApp />);
+    await login();
+
+    await openChecklist("단지1 수정");
+    fireEvent.click(screen.getByRole("button", { name: "저장" }));
+
+    await waitFor(() => expect(updateDashboardItemDetails).toHaveBeenCalled());
+    expect(deleteInspection).not.toHaveBeenCalled();
+    expect(saveInspection).not.toHaveBeenCalled();
   });
 });

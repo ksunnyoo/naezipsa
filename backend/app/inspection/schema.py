@@ -50,6 +50,17 @@ class InspectionRecord(InspectionCreate):
     updated_at: datetime
 
 
+class InspectionDeleted(BaseModel):
+    """임장 기록 삭제 결과.
+
+    원래 기록이 없었으면 `deleted=false`다. 오류가 아니라 "지울 게 없었다"는 뜻이라
+    404를 주지 않는다 - 화면은 체크를 모두 비울 때마다 지우기를 보내는데, 원래
+    기록이 없던 후보에서도 그게 오류로 보이면 안 된다.
+    """
+
+    deleted: bool
+
+
 class InspectionListResponse(BaseModel):
     """내 후보의 임장 기록 전체. 후보 카드에 점수를 띄우려면 목록 단계에서
     모든 후보의 항목 점수가 필요해서 한 번에 준다(후보마다 한 번씩 부르면 느리다).

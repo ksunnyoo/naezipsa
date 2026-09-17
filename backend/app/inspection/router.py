@@ -9,6 +9,7 @@ from app.core.deps import get_current_profile
 from app.inspection import service
 from app.inspection.schema import (
     InspectionCreate,
+    InspectionDeleted,
     InspectionListResponse,
     InspectionProperty,
     InspectionRecord,
@@ -50,6 +51,19 @@ def get_inspection(
 ):
     """저장해둔 임장 기록을 불러온다. 아직 없으면 404 - 화면은 빈 값으로 시작한다."""
     return service.get_inspection(db, profile.id, property_id)
+
+
+@router.delete("/{property_id}/inspection", response_model=InspectionDeleted)
+def delete_inspection(
+    property_id: PropertyId,
+    profile: Profile = Depends(get_current_profile),
+    db: Session = Depends(get_db),
+):
+    """임장 기록을 지운다. 체크리스트를 모두 비우고 저장하면 화면이 이걸 부른다.
+
+    원래 기록이 없었으면 `deleted=false`로 200이다(지울 게 없었을 뿐 오류가 아니다).
+    """
+    return InspectionDeleted(deleted=service.delete_inspection(db, profile.id, property_id))
 
 
 @router.post("/{property_id}/inspection", response_model=InspectionRecord, status_code=201)
