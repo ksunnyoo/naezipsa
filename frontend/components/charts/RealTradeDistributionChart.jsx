@@ -289,7 +289,7 @@ export default function RealTradeDistributionChart({ items }) {
     <ChartPlaceholder
       title="실거래 분포도"
       className="chart-main"
-      infoText="체크한 매물들의 실거래가를 흩어서 보여주고, 입력한 호가와 비교해요."
+      infoText="주변 실제 거래가격과 입력한 호가를 비교해 적정 가격인지 가늠할 수 있어요."
       headerRight={
         <div className="trade-distribution-chart__header-right">
           <div className="trade-distribution-chart__legend">
@@ -460,6 +460,20 @@ export default function RealTradeDistributionChart({ items }) {
 
                 return (
                   <g key={item.id}>
+                    {/* 마우스 올린 컬럼 영역 구분(2026-09 피드백 - 다른
+                        차트(TradeVolumeLiquidityChart 등)처럼 호버 시 옅은
+                        회색 배경으로 영역이 보였으면 좋겠다는 요청). 점/글로우보다
+                        먼저 그려서 맨 뒤에 깔리게 한다. */}
+                    {hoveredItemId === item.id && (
+                      <rect
+                        x={PLOT_LEFT + colWidth * idx}
+                        y={PLOT_TOP}
+                        width={colWidth}
+                        height={PLOT_BOTTOM - PLOT_TOP}
+                        className="trade-distribution-chart__col-highlight"
+                      />
+                    )}
+
                     {/* 데이터가 거의/전혀 없는 컬럼(예: 호가만 입력된 경우)도
                         다른 컬럼과 같은 축 위에 있다는 게 보이도록 옅은
                         세로 기준선을 항상 깔아준다(2026-09 피드백 - 점 하나만

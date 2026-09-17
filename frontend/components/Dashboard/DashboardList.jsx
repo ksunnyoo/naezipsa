@@ -51,7 +51,6 @@ export default function DashboardList({
 
       {remaining > 0 && (
         <div className="interest-row" data-slot="add">
-          <span className="interest-drag-spacer" aria-hidden="true" />
           <button
             type="button"
             className="dashboard-add-slot"

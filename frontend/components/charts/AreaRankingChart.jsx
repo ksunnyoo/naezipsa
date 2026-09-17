@@ -119,7 +119,7 @@ export default function AreaRankingChart({ items }) {
     <ChartPlaceholder
       title="생활권 내 단지 랭킹"
       className="area-ranking-chart"
-      infoText={"체크한 매물과 같은 자치구, 비슷한 평형대의\n단지들을 평당 가격 기준으로 비교한 순위예요."}
+      infoText={"주변 지역·비슷한 평형의 단지와 평당 가격을 비교해 현재 가격 수준을 확인할 수 있어요."}
     >
       <div className="area-ranking-chart__wrap">
         <div className="area-ranking-chart__header">

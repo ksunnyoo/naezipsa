@@ -139,7 +139,7 @@ export default function MacroDataChart() {
     <ChartPlaceholder
       title="매매가격지수"
       className="macro-data-chart"
-      infoText={"한국부동산원이 발표하는 지역별 집값 흐름을 보여줘요.\n기준 시점보다 위면 집값이 오른 거고, 아래면 내린 거예요."}
+      infoText={"한국부동산원 지수로 지역 전체의 집값이 상승·하락하는 흐름을 확인할 수 있어요.\n지수가 100보다 크면 기준 시점(예: 20xx년 x월 = 100) 보다 집값이 올랐다는 뜻이에요."}
       headerRight={
         <div className="macro-data-chart__header-right">
           <label className="macro-data-chart__period-picker">

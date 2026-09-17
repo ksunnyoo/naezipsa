@@ -1,7 +1,7 @@
 "use client";
 
 import { DragHandleIcon, PencilIcon, XIcon } from "../icons";
-import { REGULATIONS, unitText } from "@/lib/data";
+import { unitText } from "@/lib/data";
 
 // <InterestCard /> : 관심 매물 카드 한 줄(드래그 손잡이 + 카드). 카드 전체
 // (수정/삭제 버튼 영역 제외)를 누르면 대시보드 반영 체크가 토글된다 —
@@ -10,12 +10,6 @@ import { REGULATIONS, unitText } from "@/lib/data";
 // .interest-card-actions(수정/삭제 버튼 영역) 안이면 무시하는 방식 — 별도
 // 오버레이/z-index 없이 이벤트 버블링만으로 처리해 구조가 단순하다.
 export default function InterestCard({ item, onToggle, onEdit, onRemove, onDragHandleMouseDown }) {
-  const matchedBadges = (item.regulations || [])
-    .map((key) => REGULATIONS[key])
-    .filter(Boolean);
-  // 해당하는 규제가 하나도 없으면 "규제 해당 없음" 뱃지를 대신 보여준다.
-  const badges = matchedBadges.length > 0 ? matchedBadges : [REGULATIONS.none];
-
   return (
     <div
       className={"interest-row" + (item.checked ? "" : " is-unchecked")}
@@ -88,13 +82,6 @@ export default function InterestCard({ item, onToggle, onEdit, onRemove, onDragH
         </div>
         <div className="interest-card-size">
           {item.sizeLabel} · <span className="interest-card-dongho">{unitText(item)}</span>
-        </div>
-        <div className="interest-card-badges">
-          {badges.map((def) => (
-            <span key={def.label} className={"reg-badge " + def.cls}>
-              {def.label}
-            </span>
-          ))}
         </div>
       </div>
     </div>
