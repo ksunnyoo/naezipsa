@@ -89,7 +89,9 @@ export default function MacroDataChart() {
       .catch(() => {
         if (cancelled) return;
         // 네트워크 실패 자체는 캐싱하지 않는다 — 다음 시도 때 재조회되게.
-        setError("매매가격지수를 불러오지 못했어요. 잠시 후 다시 시도해주세요.");
+        setError(
+          "매매가격지수를 불러오지 못했어요. 잠시 후 다시 시도해주세요.",
+        );
         setChartData([]);
       })
       .finally(() => {
@@ -127,7 +129,8 @@ export default function MacroDataChart() {
   // 헤드라인(최신값/전월대비 증감률)은 선택한 기간과 무관하게 항상 가장
   // 최근 두 달 기준 — months가 3이든 36이든 배열의 마지막 두 항목은 항상
   // 같은(가장 최근) 달이기 때문에 기간 선택에 따라 값이 흔들리지 않는다.
-  const latestValue = chartData.length > 0 ? chartData[chartData.length - 1].value : null;
+  const latestValue =
+    chartData.length > 0 ? chartData[chartData.length - 1].value : null;
   const previousValue =
     chartData.length > 1 ? chartData[chartData.length - 2].value : null;
   const delta =
@@ -139,7 +142,9 @@ export default function MacroDataChart() {
     <ChartPlaceholder
       title="매매가격지수"
       className="macro-data-chart"
-      infoText={"한국부동산원 지수로 지역 전체의 집값이 상승·하락하는 흐름을 확인할 수 있어요.\n지수가 100보다 크면 기준 시점(예: 20xx년 x월 = 100) 보다 집값이 올랐다는 뜻이에요."}
+      infoText={
+        "한국부동산원 지수로 지역 전체의 집값이 상승·하락하는\n흐름을 확인할 수 있어요. 지수가 100보다 크면 기준 시점\n(예: 20xx년 x월 = 100) 보다 집값이 올랐다는 뜻이에요."
+      }
       headerRight={
         <div className="macro-data-chart__header-right">
           <label className="macro-data-chart__period-picker">
@@ -194,7 +199,13 @@ export default function MacroDataChart() {
                 margin={{ top: 10, right: 12, left: 0, bottom: 0 }}
               >
                 <defs>
-                  <linearGradient id="macroAreaFill" x1="0" y1="0" x2="0" y2="1">
+                  <linearGradient
+                    id="macroAreaFill"
+                    x1="0"
+                    y1="0"
+                    x2="0"
+                    y2="1"
+                  >
                     <stop
                       offset="5%"
                       stopColor="var(--color-primary)"

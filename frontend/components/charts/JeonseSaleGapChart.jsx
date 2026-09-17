@@ -47,8 +47,18 @@ function ComplexTooltip({ active, payload, label }) {
   if (!row) return null;
 
   const rows = [
-    { key: "sale", label: "매매가", value: row.sale, color: "var(--color-chart-sale)" },
-    { key: "jeonse", label: "전세가", value: row.jeonse, color: "var(--color-chart-jeonse)" },
+    {
+      key: "sale",
+      label: "매매가",
+      value: row.sale,
+      color: "var(--color-chart-sale)",
+    },
+    {
+      key: "jeonse",
+      label: "전세가",
+      value: row.jeonse,
+      color: "var(--color-chart-jeonse)",
+    },
   ];
 
   return (
@@ -88,7 +98,9 @@ function ComplexTooltip({ active, payload, label }) {
                 flexShrink: 0,
               }}
             />
-            <span style={{ color: "#6b7280", fontWeight: 500 }}>{row.label}</span>
+            <span style={{ color: "#6b7280", fontWeight: 500 }}>
+              {row.label}
+            </span>
           </div>
           <span
             style={{
@@ -113,11 +125,13 @@ export default function JeonseSaleGapChart({ items }) {
   const [error, setError] = useState(null);
 
   const checkedItems = (items || []).filter(
-    (it) => it.checked && it.sizeId != null
+    (it) => it.checked && it.sizeId != null,
   );
   // TradeVolumeLiquidityChart와 동일한 이유로 items 배열 참조 대신 의존성용
   // 키 문자열을 만든다 — 실제로 대상이 바뀔 때만 재조회되게.
-  const checkedKey = checkedItems.map((it) => `${it.id}:${it.sizeId}`).join(",");
+  const checkedKey = checkedItems
+    .map((it) => `${it.id}:${it.sizeId}`)
+    .join(",");
 
   useEffect(() => {
     // 체크된 매물이 없으면 조회를 건너뛴다 — 렌더에서 checkedItems.length로
@@ -137,7 +151,13 @@ export default function JeonseSaleGapChart({ items }) {
         const rows = checkedItems.map((item) => {
           const row = bySizeId.get(item.sizeId);
           if (!row || row.sample_insufficient) {
-            return { name: item.name, sale: 0, jeonse: 0, gap: 0, percent: null };
+            return {
+              name: item.name,
+              sale: 0,
+              jeonse: 0,
+              gap: 0,
+              percent: null,
+            };
           }
           // 백엔드는 원(₩) 단위로 내려주는데 이 차트는 기존부터 만원 단위를
           // 다뤄서(formatKoreanMoney) 여기서 맞춰준다.
@@ -170,7 +190,9 @@ export default function JeonseSaleGapChart({ items }) {
       })
       .catch(() => {
         if (cancelled) return;
-        setError("전세-매매 갭 데이터를 불러오지 못했어요. 잠시 후 다시 시도해주세요.");
+        setError(
+          "전세-매매 갭 데이터를 불러오지 못했어요. 잠시 후 다시 시도해주세요.",
+        );
         setChartData([]);
       })
       .finally(() => {
@@ -184,7 +206,10 @@ export default function JeonseSaleGapChart({ items }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- checkedKey가 checkedItems의 실질적인 변경을 대신 표현
   }, [checkedKey]);
 
-  const maxSaleValue = Math.max(1, ...chartData.map((item) => Number(item.sale ?? 0)));
+  const maxSaleValue = Math.max(
+    1,
+    ...chartData.map((item) => Number(item.sale ?? 0)),
+  );
   // 1.18 -> 1.32: 가장 높은 막대 위 퍼센트 라벨(LabelList)이 카드 상단에
   // 바싹 붙어 보인다는 피드백(2026-09) — y축 도메인 여유를 더 줘서 막대
   // 자체를 상대적으로 낮추고, margin.top도 같이 늘려 라벨이 들어갈
@@ -195,13 +220,19 @@ export default function JeonseSaleGapChart({ items }) {
     <ChartPlaceholder
       title="전세-매매 갭 분석"
       className="jeonse-sale-gap-chart"
-      infoText={"매매가와 전세가의 차이를 비교해요.\n전세가율이 높을수록 두 가격의 차이가 작아요."}
+      infoText={
+        "전세가율(매매가 대비 전세가 비율)이에요.\n전세가율이 낮을수록 전세 대출·보증보험에\n유리하고, 높을수록 집값이 내렸을 때 보증금을\n못 돌려받는 깡통전세 위험이 커져요."
+      }
     >
       <div className="jeonse-sale-gap-chart__wrap">
         <div className="jeonse-sale-gap-chart__chart">
           {checkedItems.length === 0 && (
             <div className="jeonse-sale-gap-chart__empty">
-              <img className="chart-empty-icon" src="/empty-state-icon.png" alt="" />
+              <img
+                className="chart-empty-icon"
+                src="/empty-state-icon.png"
+                alt=""
+              />
               선택된 매물이 없어요.
             </div>
           )}
@@ -259,7 +290,9 @@ export default function JeonseSaleGapChart({ items }) {
                     dataKey="percent"
                     position="top"
                     offset={8}
-                    formatter={(value) => (value == null ? "표본 부족" : `${value}%`)}
+                    formatter={(value) =>
+                      value == null ? "표본 부족" : `${value}%`
+                    }
                     style={{
                       fill: "#374151",
                       fontSize: 12,
