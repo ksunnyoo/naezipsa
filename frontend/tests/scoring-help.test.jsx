@@ -48,6 +48,25 @@ describe('임장 체크리스트의 "?"', () => {
     expect(screen.getByLabelText("설비").value).toBe(String(BUY.facility_group));
   });
 
+  it("적은 숫자가 실제로 몇 %인지 옆에 같이 보여준다", () => {
+    // 칸에 적는 숫자는 서로의 비율일 뿐이라, 30이 30%라는 보장이 없다.
+    // 매매 기본값(30/20/25/15/10, 합 100)은 마침 숫자와 %가 같다.
+    openHelp();
+    for (const [label, share] of [["교통", 30], ["교육·생활", 20], ["단지", 25]]) {
+      expect(screen.getByLabelText(label).parentElement.textContent).toContain(`${share}%`);
+    }
+  });
+
+  it("한 칸을 고치면 나머지 칸의 %도 같이 움직인다", () => {
+    openHelp();
+    // 교통을 30 -> 70으로 올리면 합이 140이 되어, 숫자를 안 건드린 단지의 몫이 줄어든다.
+    fireEvent.change(screen.getByLabelText("교통"), { target: { value: "70" } });
+
+    expect(screen.getByLabelText("교통").parentElement.textContent).toContain("50%");
+    expect(screen.getByLabelText("단지").value).toBe(String(BUY.complex_group)); // 숫자는 그대로
+    expect(screen.getByLabelText("단지").parentElement.textContent).toContain("18%"); // 25/140
+  });
+
   it("그룹을 보는 중이면 그 그룹 기준이라고 알려준다", () => {
     const groupWeights = {
       transport_group: 50, education_life_group: 10, complex_group: 10,

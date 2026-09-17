@@ -11,6 +11,7 @@ import {
   computeOverallScore,
   editableWeights,
   scoringSource,
+  weightShares,
   weightsForContext,
 } from "@/lib/checklist";
 
@@ -76,6 +77,8 @@ export default function EditListingDialog({
   // 그룹 기준 > 내 기본 기준 > 이용 목적 기본값 순으로 고른다.
   const weights = weightsForContext(group, profile);
   const source = scoringSource(group, profile);
+  // 적은 숫자가 실제로 몇 %를 차지하는지. 숫자만 보면 옆 칸 값에 따라 뜻이 달라진다.
+  const draftShares = weightShares(draftWeights);
 
   function toggleHelp() {
     if (!helpOpen) setDraftWeights(editableWeights(group, profile));
@@ -272,25 +275,30 @@ export default function EditListingDialog({
                 {helpOpen && (
                   <div className="checklist-weights">
                     <p className="checklist-weights-source">
-                      지금은 <strong>{source.label}</strong>으로 계산해요. 아래 비중을 바꾸면
-                      점수가 바로 다시 계산됩니다.
+                      지금은 <strong>{source.label}</strong>으로 계산해요.
                     </p>
                     {WEIGHT_CATEGORIES.map(({ key, label }) => (
                       <label key={key} className="checklist-weights-row">
                         <span>{label}</span>
-                        <input
-                          type="number"
-                          min={0}
-                          max={100}
-                          value={draftWeights[key] ?? 0}
-                          disabled={savingWeights}
-                          onChange={(event) =>
-                            setDraftWeights((previous) => ({
-                              ...previous,
-                              [key]: Math.max(0, Math.min(100, Number(event.target.value) || 0)),
-                            }))
-                          }
-                        />
+                        <span className="checklist-weights-value">
+                          {/* 적은 숫자가 곧 퍼센트가 아니다(합으로 나눈 몫이 실제 비중).
+                              그래서 실제로 몇 %인지 옆에 같이 보여준다. */}
+                          <span className="checklist-weights-share">{`${draftShares[key]}%`}</span>
+                          <input
+                            type="number"
+                            min={0}
+                            max={100}
+                            value={draftWeights[key] ?? 0}
+                            aria-label={label}
+                            disabled={savingWeights}
+                            onChange={(event) =>
+                              setDraftWeights((previous) => ({
+                                ...previous,
+                                [key]: Math.max(0, Math.min(100, Number(event.target.value) || 0)),
+                              }))
+                            }
+                          />
+                        </span>
                       </label>
                     ))}
                     <div className="checklist-weights-actions">
