@@ -4902,10 +4902,6 @@ select:focus-visible {
   line-height: 1.65;
   color: #374151;
 }
-.duplicate-dialog-text b {
-  font-weight: 600;
-  color: var(--main, #2f6df6);
-}
 .duplicate-dialog-hint {
   margin: 10px 0 0;
   font-size: 13px;

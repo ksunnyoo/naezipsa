@@ -1246,7 +1246,6 @@ export default function NaejipsaApp() {
         open={duplicatePrompt != null}
         name={duplicatePrompt?.item.name ?? ""}
         sizeLabel={duplicatePrompt?.item.sizeLabel ?? ""}
-        unit={duplicatePrompt ? unitText(duplicatePrompt.item) : ""}
         onSame={handleDuplicateSame}
         onDifferent={handleDuplicateDifferent}
         onCancel={() => setDuplicatePrompt(null)}
