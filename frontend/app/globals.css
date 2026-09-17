@@ -56,7 +56,7 @@
      같은 x좌표에서 시작하도록 이 세 값을 그대로 계산에 재사용한다. .dashboard,
      .dashboard-list도 이 변수를 그대로 쓰므로 값이 바뀌어도 항상 서로 맞는다 */
   --dashboard-h-pad: clamp(20px, 0.5vw, 36px);
-  --dashboard-list-w: clamp(240px, 17vw, 280px);
+  --dashboard-list-w: clamp(220px, 17vw, 270px);
   --dashboard-gap: 16px;
   --chart-area-start: calc(
     var(--dashboard-h-pad) + var(--dashboard-list-w) + var(--dashboard-gap)
@@ -81,6 +81,15 @@ html,
 body {
   margin: 0;
   height: 100%;
+  /* 폰트 크기 전역 조절 레버 (2026-09) - 전체 font-size를 rem 단위로
+     통일했으므로, 여기 100%(=16px) 하나만 바꾸면 rem으로 된 모든
+     글자 크기가 똑같은 비율로 같이 줄고 늘어난다. em과 달리 중첩된
+     요소끼리 배율이 곱해지지 않고 항상 이 html 기준 하나로만 계산되므로,
+     예를 들어 90%로 낮추면 전체가 정확히 10% 작아진다.
+     padding/gap/border-radius 등 font-size가 아닌 px 값들은 이 레버와
+     무관하게 그대로 고정 크기를 유지한다(의도적 - 레이아웃 간격까지
+     같이 줄이려면 별도 작업 필요). */
+  font-size: 100%;
   background: var(--color-panel);
   color: var(--color-ink);
   font-family:
@@ -118,14 +127,15 @@ textarea:focus-visible,
 select:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
-  box-shadow: 0 0 0 4px rgba(11, 183, 109, 0.12);
 }
 
 #app {
   position: relative;
   width: 100%;
-  min-height: 100vh;
-  overflow: hidden;
+  min-height: calc(100vh - 40px);
+  overflow-x: auto;
+  overflow-y: hidden;
+  min-width: 1200px;
 }
 /* 컴포넌트별 display:flex 등이 hidden 속성보다 나중에 캐스케이드에 적용되면서
    hidden="" 이 무시되는 문제를 막기 위한 전역 오버라이드. */
@@ -161,11 +171,12 @@ select:focus-visible {
   border-bottom: 2px solid transparent;
   background: none;
   padding: 4px 2px 6px;
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 500;
   color: var(--color-ink);
   cursor: pointer;
   outline: none;
+  white-space: nowrap;
   transition:
     color 0.2s ease,
     border-color 0.2s ease;
@@ -201,10 +212,11 @@ select:focus-visible {
   flex-shrink: 0;
 }
 .logo-word {
-  font-size: 21px;
-  font-weight: 800;
+  font-family: "Jua", sans-serif;
+  font-size: 1.6rem;
   letter-spacing: -0.02em;
   color: var(--color-primary);
+  padding-top: 4px;
 }
 
 .header-actions {
@@ -224,20 +236,45 @@ select:focus-visible {
   justify-content: center;
   position: relative;
   flex-shrink: 0;
+  /* 입체감: 촘촘한 컨택트 섀도우 + 넓게 퍼지는 앰비언트 섀도우를 겹치고,
+     위쪽엔 빛이 닿는 것처럼 밝은 inset 하이라이트를 살짝 넣는다. */
+  box-shadow:
+    0 1px 2px rgba(17, 17, 17, 0.1),
+    0 2px 6px rgba(17, 17, 17, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  transition:
+    box-shadow 0.15s ease,
+    transform 0.15s ease;
 }
 .nav-icon-btn:hover {
   background: var(--color-surface-subtle);
+  /* .nav-login-btn/.nav-logout-btn과 동일하게 그림자를 키우고 살짝 띄운다 */
+  box-shadow:
+    0 2px 4px rgba(17, 17, 17, 0.12),
+    0 4px 10px rgba(17, 17, 17, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  transform: translateY(-1px);
+}
+.nav-icon-btn:active {
+  box-shadow: 0 1px 1px rgba(17, 17, 17, 0.08);
+  transform: translateY(0);
 }
 .nav-icon-btn.is-active {
   background: var(--color-surface-subtle);
   border-color: var(--color-primary);
 }
-/* 프로필을 불러오기 전의 마이페이지 아이콘처럼 아직 누를 수 없는 아이콘 버튼 */
+/* 프로필을 불러오기 전의 마이페이지 아이콘처럼 아직 누를 수 없는 아이콘 버튼 -
+   눌러도 반응하면 안 되니 호버/액티브의 그림자·이동 효과를 무효화한다. */
 .nav-icon-btn:disabled,
 .nav-icon-btn:disabled:hover {
   background: var(--color-surface);
   opacity: 0.45;
   cursor: not-allowed;
+  box-shadow:
+    0 1px 2px rgba(17, 17, 17, 0.1),
+    0 2px 6px rgba(17, 17, 17, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  transform: none;
 }
 .nav-icon-btn .badge-dot {
   position: absolute;
@@ -251,11 +288,13 @@ select:focus-visible {
 }
 .nav-link {
   padding: 12px 10px;
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 600;
   color: var(--color-text-secondary);
   text-decoration: none;
   white-space: nowrap;
+  background: none;
+  border: none;
 }
 
 .nav-login-btn {
@@ -267,12 +306,29 @@ select:focus-visible {
   color: var(--color-text-secondary);
   padding: 6px 14px;
   border-radius: var(--radius-md);
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 600;
   cursor: pointer;
+  /* .nav-icon-btn과 동일한 입체감 처리(컨택트+앰비언트 섀도우 + 상단 하이라이트) */
+  box-shadow:
+    0 1px 2px rgba(17, 17, 17, 0.1),
+    0 2px 6px rgba(17, 17, 17, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  transition:
+    box-shadow 0.15s ease,
+    transform 0.15s ease;
 }
 .nav-login-btn:hover {
   background: var(--color-surface-subtle);
+  box-shadow:
+    0 2px 4px rgba(17, 17, 17, 0.12),
+    0 4px 10px rgba(17, 17, 17, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  transform: translateY(-1px);
+}
+.nav-login-btn:active {
+  box-shadow: 0 1px 1px rgba(17, 17, 17, 0.08);
+  transform: translateY(0);
 }
 
 .nav-user {
@@ -285,7 +341,7 @@ select:focus-visible {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 600;
   color: var(--color-text-secondary);
 }
@@ -295,12 +351,28 @@ select:focus-visible {
   color: var(--color-text-secondary);
   padding: 6px 14px;
   border-radius: var(--radius-md);
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 600;
   cursor: pointer;
+  box-shadow:
+    0 1px 2px rgba(17, 17, 17, 0.1),
+    0 2px 6px rgba(17, 17, 17, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  transition:
+    box-shadow 0.15s ease,
+    transform 0.15s ease;
 }
 .nav-logout-btn:hover {
   background: var(--color-surface-subtle);
+  box-shadow:
+    0 2px 4px rgba(17, 17, 17, 0.12),
+    0 4px 10px rgba(17, 17, 17, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  transform: translateY(-1px);
+}
+.nav-logout-btn:active {
+  box-shadow: 0 1px 1px rgba(17, 17, 17, 0.08);
+  transform: translateY(0);
 }
 
 .auth-modal-overlay {
@@ -319,6 +391,14 @@ select:focus-visible {
 .auth-modal-overlay.is-open {
   opacity: 1;
   pointer-events: auto;
+}
+/* .modal-overlay(z-index 40)가 파일 뒤쪽에서 다시 선언돼 있어서, 클래스
+   두 개를 같이 쓰는 AuthModal에서는(동일 specificity라 소스 순서로 결정)
+   위의 z-index:60이 실제로는 한 번도 이기지 못했다. 매물 정보 팝업(50) 위에
+   로그인 모달을 띄워야 하는 지금(2026-09-17, 게스트 체크리스트 확인 팝업 →
+   로그인) 이 문제가 실제로 드러나서, specificity로 확실히 이기게 고정한다. */
+.modal-overlay.auth-modal-overlay {
+  z-index: 60;
 }
 
 .auth-modal {
@@ -348,14 +428,14 @@ select:focus-visible {
 }
 
 .auth-modal-title {
-  font-size: 26px;
+  font-size: 1.625rem;
   font-weight: 800;
   letter-spacing: -0.03em;
 }
 
 .auth-modal-title {
   margin: 0;
-  font-size: 17px;
+  font-size: 1.0625rem;
   font-weight: 700;
   color: var(--color-ink);
   letter-spacing: -0.01em;
@@ -386,20 +466,81 @@ select:focus-visible {
   gap: 16px;
 }
 
-.profile-onboarding { max-height: calc(100dvh - 32px); overflow-y: auto; }
-.profile-intro { margin: 0; line-height: 1.6; font-size: 14px; overflow-wrap: anywhere; }
-.profile-onboarding select { min-height: 44px; padding: 8px 12px; border: 1px solid var(--color-border-strong); border-radius: 12px; background: var(--color-panel); color: var(--color-ink); }
-.profile-purposes { border: 0; padding: 0; margin: 0; }
-.profile-purposes legend { margin-bottom: 10px; font-size: 14px; font-weight: 600; }
-.profile-purposes .chip-row { flex-wrap: wrap; }
-.profile-onboarding :focus-visible { outline: 2px solid var(--color-primary); outline-offset: 3px; }
-.profile-load-error { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 50; width: min(520px, calc(100vw - 32px)); padding: 16px; display: flex; gap: 12px; background: var(--color-panel); border: 1px solid var(--color-border); border-radius: 12px; font-size: 14px; }
+.profile-onboarding {
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+}
+.profile-intro {
+  margin: 0;
+  line-height: 1.6;
+  font-size: 0.875rem;
+  overflow-wrap: anywhere;
+}
+.profile-onboarding select {
+  /* 바로 위 닉네임 인풋(.auth-field input)과 높이/패딩/폰트 크기를
+     맞춰서 두 필드의 크기가 시각적으로 어긋나 보이지 않도록 함
+     (2026-09 피드백). */
+  height: 48px;
+  padding: 0 36px 0 14px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 12px;
+  background-color: var(--color-panel);
+  font-size: 0.9375rem;
+  color: var(--color-ink);
+  /* 사파리는 select에 OS 기본 스킨을 입혀서 appearance를 안 지우면
+     border-radius가 그대로 무시된다 - 기본 화살표도 같이 없어지므로
+     화살표를 배경 이미지로 직접 그려 넣는다 (2026-09 피드백). */
+  -webkit-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='M6 9l6 6 6-6' stroke='%23666666' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 16px;
+}
+/* 마이페이지 모달의 닉네임 인풋은 공용 .auth-field input(회색 배경,
+   --color-surface-subtle)과 달리 흰 배경으로 노출 (2026-09 피드백).
+   로그인/회원가입 모달(AuthModal)의 .auth-field 입력칸은 그대로 둔다. */
+.profile-onboarding .auth-field input {
+  background: var(--color-panel);
+}
+.profile-purposes {
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+.profile-purposes legend {
+  margin-bottom: 10px;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+.profile-purposes .chip-row {
+  flex-wrap: wrap;
+}
+.profile-onboarding :focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 3px;
+}
+.profile-load-error {
+  position: fixed;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+  width: min(520px, calc(100vw - 32px));
+  padding: 16px;
+  display: flex;
+  gap: 12px;
+  background: var(--color-panel);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  font-size: 0.875rem;
+}
 
 .auth-field {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 600;
   color: var(--color-text-secondary);
 }
@@ -411,7 +552,7 @@ select:focus-visible {
   border-radius: 12px;
   background: var(--color-surface-subtle);
   padding: 0 14px;
-  font-size: 15px;
+  font-size: 0.9375rem;
   color: var(--color-ink);
 }
 
@@ -423,7 +564,7 @@ select:focus-visible {
 
 .auth-error {
   margin: 0;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
   color: var(--color-danger);
   background: var(--color-danger-bg);
@@ -446,7 +587,7 @@ select:focus-visible {
   position: relative;
   text-align: center;
   color: var(--color-text-muted);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
 }
 
@@ -493,7 +634,7 @@ select:focus-visible {
   background: var(--color-surface-subtle);
 }
 .sns-btn-label {
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 600;
 }
 
@@ -536,7 +677,7 @@ select:focus-visible {
   border: none;
   background: transparent;
   padding: 0;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--color-text-secondary);
   font-weight: 600;
 }
@@ -553,7 +694,7 @@ select:focus-visible {
 
 .auth-signup-title {
   margin: 8px 0 0;
-  font-size: clamp(18px, 1vw, 30px);
+  font-size: clamp(1.125rem, 1vw, 1.875rem);
   line-height: 1.25;
   letter-spacing: -0.04em;
   font-weight: 800;
@@ -579,13 +720,13 @@ select:focus-visible {
 }
 
 .signup-summary-label {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--color-text-secondary);
   font-weight: 600;
 }
 
 .signup-summary-value {
-  font-size: 18px;
+  font-size: 1.125rem;
   font-weight: 700;
   color: var(--color-ink);
 }
@@ -602,7 +743,7 @@ select:focus-visible {
   align-items: center;
   gap: 10px;
   padding: 8px 0;
-  font-size: 15px;
+  font-size: 0.9375rem;
   color: var(--color-ink);
 }
 
@@ -632,7 +773,7 @@ select:focus-visible {
   background: transparent;
   padding: 0;
   color: var(--color-text-secondary);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
   text-decoration: underline;
   text-underline-offset: 2px;
@@ -662,7 +803,7 @@ select:focus-visible {
 }
 
 .signup-step-title {
-  font-size: 16px;
+  font-size: 1rem;
   font-weight: 700;
   color: var(--color-ink);
   letter-spacing: -0.02em;
@@ -673,7 +814,7 @@ select:focus-visible {
   flex-direction: column;
   gap: 8px;
   color: var(--color-text-secondary);
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 600;
 }
 
@@ -685,13 +826,13 @@ select:focus-visible {
   background: transparent;
   color: var(--color-ink);
   padding: 0 16px;
-  font-size: 16px;
+  font-size: 1rem;
   font-weight: 700;
   outline: none;
 }
 
 .signup-field input::placeholder {
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 500;
   color: var(--color-text-secondary);
 }
@@ -714,7 +855,7 @@ select:focus-visible {
   border-radius: 12px;
   background: var(--color-primary-soft);
   color: var(--color-primary);
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 600;
   padding: 0 12px;
 }
@@ -732,7 +873,7 @@ select:focus-visible {
 
 .username-check-message {
   margin: 0;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 700;
 }
 
@@ -757,7 +898,7 @@ select:focus-visible {
   border: 1px solid var(--color-border-strong);
   background: transparent;
   color: var(--color-ink);
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 700;
 }
 
@@ -792,7 +933,7 @@ select:focus-visible {
   padding: 0 18px;
   border: none;
   background: transparent;
-  font-size: 16px;
+  font-size: 1rem;
   font-weight: 700;
   color: var(--color-ink);
   border-right: 1px solid var(--color-border);
@@ -805,7 +946,7 @@ select:focus-visible {
   background: transparent;
   color: var(--color-ink);
   padding: 0 12px 0 0;
-  font-size: 16px;
+  font-size: 1rem;
   font-weight: 700;
 }
 
@@ -826,7 +967,7 @@ select:focus-visible {
   border-radius: 10px;
   background: var(--color-primary-soft);
   color: var(--color-primary);
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 700;
   padding: 0 12px;
   margin-right: 8px;
@@ -845,7 +986,7 @@ select:focus-visible {
   background: transparent;
   color: var(--color-ink);
   padding: 0 16px;
-  font-size: 16px;
+  font-size: 1rem;
   font-weight: 700;
 }
 
@@ -859,7 +1000,7 @@ select:focus-visible {
   border-radius: 12px;
   background: var(--color-primary);
   color: var(--color-on-primary);
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 700;
   margin-top: 6px;
 }
@@ -874,20 +1015,6 @@ select:focus-visible {
   background: var(--color-primary-hover);
 }
 
-@media (max-width: 560px) {
-  .nav-icon-btn {
-    display: none;
-  }
-  .header-actions {
-    gap: 8px;
-  }
-}
-@media (max-width: 420px) {
-  .header {
-    padding: 0 16px;
-  }
-}
-
 .hero {
   min-height: 100%;
   display: flex;
@@ -899,7 +1026,7 @@ select:focus-visible {
 }
 .hero h1 {
   margin: 0;
-  font-size: clamp(28px, 4vw, 46px);
+  font-size: clamp(1.75rem, 4vw, 2.875rem);
   line-height: 1.28;
   font-weight: 800;
   letter-spacing: -0.02em;
@@ -907,7 +1034,7 @@ select:focus-visible {
 }
 .hero p {
   margin: 18px 0 0;
-  font-size: 17px;
+  font-size: 1.0625rem;
   line-height: 1.6;
   color: var(--color-text-secondary);
   text-wrap: balance;
@@ -921,7 +1048,7 @@ select:focus-visible {
   border-radius: var(--radius-md);
   background: var(--color-primary);
   color: var(--color-on-primary);
-  font-size: 17px;
+  font-size: 1.0625rem;
   font-weight: 700;
 }
 .cta-primary:hover {
@@ -930,7 +1057,7 @@ select:focus-visible {
 
 .doc-section-label {
   margin-top: 72px;
-  font-size: 17px;
+  font-size: 1.0625rem;
   font-weight: 700;
   color: var(--color-text-secondary);
 }
@@ -969,7 +1096,7 @@ select:focus-visible {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 700;
   color: var(--color-text-subtle);
   cursor: help;
@@ -979,7 +1106,7 @@ select:focus-visible {
   outline-offset: 2px;
 }
 .doc-label {
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 600;
   color: var(--color-ink-2);
   line-height: 1.4;
@@ -1043,7 +1170,7 @@ select:focus-visible {
      크기/색으로 통일(2026-09 피드백 - 여기만 더 크고 더 진한 색이라
      따로 튀어 보임) */
   margin: 0;
-  font-size: clamp(12px, 1.7vh, 14px);
+  font-size: clamp(0.75rem, 1.7vh, 0.875rem);
   font-weight: 700;
   letter-spacing: -0.02em;
   color: #1f2937;
@@ -1145,7 +1272,7 @@ select:focus-visible {
   border-radius: var(--radius-md);
   background: var(--color-primary-bg);
   color: var(--color-primary-hover);
-  font-size: 12.5px;
+  font-size: 0.7812rem;
   font-weight: 700;
   padding: 7px 14px;
   cursor: pointer;
@@ -1162,7 +1289,7 @@ select:focus-visible {
   cursor: not-allowed;
 }
 .insight-ai-summary {
-  font-size: 13px;
+  font-size: 0.8125rem;
   line-height: 1.6;
   color: var(--color-ink-2);
   margin: 12px 0;
@@ -1181,7 +1308,7 @@ select:focus-visible {
   gap: 6px;
 }
 .insight-ai-item-name {
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 700;
   color: var(--color-ink);
 }
@@ -1192,7 +1319,7 @@ select:focus-visible {
 }
 .insight-ai-tag {
   flex-shrink: 0;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 700;
   padding: 2px 8px;
   border-radius: var(--radius-full);
@@ -1206,7 +1333,7 @@ select:focus-visible {
   color: var(--color-danger);
 }
 .insight-ai-item-text {
-  font-size: 12.5px;
+  font-size: 0.7812rem;
   line-height: 1.5;
   color: var(--color-ink-2);
 }
@@ -1265,7 +1392,7 @@ select:focus-visible {
   margin-bottom: 10px;
 }
 .insight-card-title {
-  font-size: clamp(12px, 1.7vh, 14px);
+  font-size: clamp(0.75rem, 1.7vh, 0.875rem);
   font-weight: 700;
   letter-spacing: -0.02em;
   color: var(--color-ink);
@@ -1277,7 +1404,7 @@ select:focus-visible {
   border: none;
   background: none;
   padding: 0;
-  font-size: 12.5px;
+  font-size: 0.7812rem;
   font-weight: 600;
   color: var(--color-text-secondary);
   text-decoration: none;
@@ -1307,9 +1434,9 @@ select:focus-visible {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 18px 0;
+  padding: 1rem 0;
   border-bottom: 1px solid var(--color-border-subtle);
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: inherit;
   text-decoration: none;
 }
@@ -1325,7 +1452,7 @@ select:focus-visible {
   border-radius: var(--radius-full);
   background: var(--color-danger-bg);
   color: var(--color-danger);
-  font-size: 11.5px;
+  font-size: 0.7188rem;
   font-weight: 700;
   white-space: nowrap;
 }
@@ -1340,7 +1467,7 @@ select:focus-visible {
 }
 .news-row-date {
   flex-shrink: 0;
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--color-text-subtle);
 }
 
@@ -1395,7 +1522,7 @@ select:focus-visible {
   gap: 6px;
 }
 .subscription-row-name {
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 600;
   color: var(--color-ink);
   overflow-wrap: anywhere;
@@ -1404,7 +1531,7 @@ select:focus-visible {
    그대로 가져오되, 한 줄짜리 작은 칩으로 줄여서 쓴다. */
 .subscription-item-category {
   flex-shrink: 0;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 700;
   letter-spacing: -0.02em;
   padding: 4px 10px;
@@ -1443,7 +1570,7 @@ select:focus-visible {
 .subscription-row-address {
   display: block;
   margin-top: 6px;
-  font-size: 11.5px;
+  font-size: 0.8rem;
   color: var(--color-text-secondary);
 }
 .subscription-row-meta {
@@ -1458,7 +1585,7 @@ select:focus-visible {
 .subscription-meta-chip {
   display: inline-flex;
   align-items: center;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 600;
   color: #4b5563;
   background: #edf1f5;
@@ -1466,11 +1593,11 @@ select:focus-visible {
   padding: 3px 9px;
 }
 .subscription-meta-text {
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--color-text-secondary);
 }
 .subscription-meta-divider {
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--color-border-strong);
 }
 
@@ -1508,7 +1635,7 @@ select:focus-visible {
   .subscription-list,
   .hero-overlay,
   .modal-content,
-  .edit-dialog,
+  .edit-dialog-panel,
   .area-ranking-chart__list,
   .subscription-region-options
 ) {
@@ -1523,7 +1650,7 @@ select:focus-visible {
   .subscription-list,
   .hero-overlay,
   .modal-content,
-  .edit-dialog,
+  .edit-dialog-panel,
   .area-ranking-chart__list,
   .subscription-region-options
 )::-webkit-scrollbar {
@@ -1537,7 +1664,7 @@ select:focus-visible {
   .subscription-list,
   .hero-overlay,
   .modal-content,
-  .edit-dialog,
+  .edit-dialog-panel,
   .area-ranking-chart__list,
   .subscription-region-options
 )::-webkit-scrollbar-track {
@@ -1551,7 +1678,7 @@ select:focus-visible {
   .subscription-list,
   .hero-overlay,
   .modal-content,
-  .edit-dialog,
+  .edit-dialog-panel,
   .area-ranking-chart__list,
   .subscription-region-options
 )::-webkit-scrollbar-thumb {
@@ -1566,7 +1693,7 @@ select:focus-visible {
   .subscription-list,
   .hero-overlay,
   .modal-content,
-  .edit-dialog,
+  .edit-dialog-panel,
   .area-ranking-chart__list,
   .subscription-region-options
 )::-webkit-scrollbar-button {
@@ -1588,7 +1715,7 @@ select:focus-visible {
   justify-content: center;
   gap: 6px;
   color: var(--color-text-subtle);
-  font-size: clamp(11px, 1.6vh, 13px);
+  font-size: clamp(0.6875rem, 1.6vh, 0.8125rem);
   font-weight: 700;
 }
 .dashboard-add-slot:hover {
@@ -1612,7 +1739,7 @@ select:focus-visible {
   overflow-y: auto;
   max-height: 100%;
   display: grid;
-  gap: 20px;
+  gap: 16px;
   grid-template-columns: 2.4fr 1.3fr;
   grid-template-rows: 1fr;
   grid-template-areas: "left side";
@@ -1634,20 +1761,20 @@ select:focus-visible {
   grid-area: left;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 16px;
   min-width: 0;
   min-height: 0;
 }
 .chart-placeholder.chart-main {
   min-width: 0;
-  min-height: 390px;
+  min-height: 374px;
   flex: 2;
 }
 .chart-side-col {
   grid-area: side;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 16px;
   min-width: 0;
   min-height: 0;
 }
@@ -1683,6 +1810,15 @@ select:focus-visible {
   padding: 15px 18px 12px;
   min-height: 160px;
   box-shadow: 0 4px 12px rgba(17, 17, 17, 0.08);
+  /* 타이틀바(제목+범례+기간선택)가 좁은 화면에서 줄바꿈될 수 있어서 flex
+     column으로 바꾼다. 예전(block)엔 그 아래 __wrap의 height:100%가
+     "타이틀바 빼고 남은 공간"이 아니라 카드 전체 높이 기준으로 계산돼서,
+     타이틀바가 2줄이 되면 그만큼 그대로 카드 밖으로 넘쳤다(2026-09
+     피드백 - "차트가 영역을 벗어남"). flex column + 아래 __wrap들의
+     flex:1로 바꾸면 타이틀바가 몇 줄이든 차트 영역이 항상 남는 공간만큼만
+     차지한다. */
+  display: flex;
+  flex-direction: column;
 }
 .chart-placeholder-titlebar {
   display: flex;
@@ -1690,9 +1826,10 @@ select:focus-visible {
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
+  flex-shrink: 0;
 }
 .chart-placeholder-title {
-  font-size: clamp(12px, 1.7vh, 14px);
+  font-size: clamp(0.75rem, 1.7vh, 0.875rem);
   font-weight: 700;
   letter-spacing: -0.02em;
   color: #1f2937;
@@ -1722,7 +1859,7 @@ select:focus-visible {
   border-radius: 50%;
   background: var(--color-border-subtle);
   color: var(--color-text-subtle);
-  font-size: 10px;
+  font-size: 0.625rem;
   font-weight: 700;
   line-height: 1;
   cursor: pointer;
@@ -1752,7 +1889,7 @@ select:focus-visible {
   /* 검정(--color-ink, #111)보다 살짝 밝게 + 약간의 투명도 */
   background: rgba(38, 38, 38, 0.92);
   color: #fff;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 500;
   line-height: 1.5;
   white-space: pre-line;
@@ -1781,7 +1918,7 @@ select:focus-visible {
   display: flex;
   flex-direction: column;
   gap: clamp(4px, 1.5vh, 12px);
-  height: 100%;
+  flex: 1;
   min-height: 0;
 }
 .macro-data-chart__header {
@@ -1799,7 +1936,7 @@ select:focus-visible {
   align-items: center;
 }
 .macro-data-chart__value {
-  font-size: clamp(11px, 2.6vh, 23px);
+  font-size: clamp(10px, 2.6vh, 1.4375rem);
   line-height: 1.1;
   font-weight: 800;
   letter-spacing: -0.04em;
@@ -1814,7 +1951,7 @@ select:focus-visible {
   border-radius: var(--radius-full);
   background: rgba(11, 183, 109, 0.1);
   color: var(--color-primary);
-  font-size: clamp(11px, 1.2vh, 12px);
+  font-size: clamp(0.6875rem, 1.2vh, 0.75rem);
   font-weight: 700;
 }
 .macro-data-chart__header-right {
@@ -1826,7 +1963,7 @@ select:focus-visible {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-size: clamp(11px, 1.5vh, 12px);
+  font-size: clamp(0.6875rem, 1.5vh, 0.75rem);
   color: #4b5563;
   font-weight: 600;
 }
@@ -1836,7 +1973,7 @@ select:focus-visible {
   border-radius: 8px;
   background: #fff;
   padding: clamp(2px, 0.6vh, 4px) 10px;
-  font-size: clamp(11px, 1.5vh, 12px);
+  font-size: clamp(0.6875rem, 1.5vh, 0.75rem);
   color: #111827;
   font-weight: 500;
   outline: none;
@@ -1846,7 +1983,7 @@ select:focus-visible {
   align-items: center;
   justify-content: center;
   height: 100%;
-  font-size: 12.5px;
+  font-size: 0.7812rem;
   color: var(--color-text-subtle);
   text-align: center;
 }
@@ -1868,7 +2005,7 @@ select:focus-visible {
   display: flex;
   flex-direction: column;
   gap: 3%;
-  height: 100%;
+  flex: 1;
   margin-top: clamp(4px, 1.2vh, 12px);
   min-height: 0;
 }
@@ -1878,7 +2015,7 @@ select:focus-visible {
   align-items: center;
   gap: 12px;
   padding: 0 12px 0;
-  font-size: clamp(11px, 1.3vh, 12px);
+  font-size: clamp(0.6875rem, 1.3vh, 0.75rem);
   font-weight: 700;
   color: #6b7280;
   letter-spacing: -0.02em;
@@ -1935,20 +2072,20 @@ select:focus-visible {
   background: rgba(17, 17, 17, 0.1);
 }
 .area-ranking-chart__row-name {
-  font-size: clamp(11px, 1.7vh, 13px);
+  font-size: clamp(0.6875rem, 1.7vh, 0.8125rem);
   font-weight: 500;
   color: #1a1a1a;
   letter-spacing: -0.03em;
 }
 .area-ranking-chart__row-rank {
-  font-size: clamp(11px, 1.7vh, 13px);
+  font-size: clamp(0.6875rem, 1.7vh, 0.8125rem);
   font-weight: 500;
   color: #1a1a1a;
   letter-spacing: -0.03em;
 }
 .area-ranking-chart__row-percentile {
   justify-self: end;
-  font-size: clamp(11px, 1.7vh, 13px);
+  font-size: clamp(0.6875rem, 1.7vh, 0.8125rem);
   font-weight: 700;
   color: var(--color-primary);
   letter-spacing: -0.03em;
@@ -1962,7 +2099,7 @@ select:focus-visible {
   flex: 1;
   min-height: 0;
   padding: 12px;
-  font-size: 12.5px;
+  font-size: 0.7812rem;
   color: var(--color-text-subtle);
   text-align: center;
 }
@@ -1977,7 +2114,8 @@ select:focus-visible {
   display: flex;
   flex-direction: column;
   gap: clamp(4px, 1.5vh, 10px);
-  height: 100%;
+  flex: 1;
+  min-height: 0;
   padding-top: 6px;
 }
 .price-trend-chart__header {
@@ -2026,7 +2164,7 @@ select:focus-visible {
   border: none;
   border-radius: var(--radius-full);
   background: transparent;
-  font-size: clamp(11px, 1.5vh, 12px);
+  font-size: clamp(0.6875rem, 1.5vh, 0.75rem);
   font-weight: 600;
   color: #6b7280;
   transition: color 0.22s ease;
@@ -2047,7 +2185,7 @@ select:focus-visible {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-size: clamp(11px, 1.5vh, 12px);
+  font-size: clamp(0.6875rem, 1.5vh, 0.75rem);
   color: #4b5563;
   font-weight: 600;
 }
@@ -2057,7 +2195,7 @@ select:focus-visible {
   border-radius: 8px;
   background: #fff;
   padding: clamp(2px, 0.6vh, 4px) 10px;
-  font-size: clamp(11px, 1.5vh, 12px);
+  font-size: clamp(0.6875rem, 1.5vh, 0.75rem);
   color: #111827;
   font-weight: 500;
   outline: none;
@@ -2066,12 +2204,15 @@ select:focus-visible {
   position: relative;
   flex: 1;
   width: 100%;
-  height: 130px;
+  height: 140px;
   min-height: clamp(70px, 13vh, 130px);
-  /* 왼쪽은 Y축 라벨("20억" 등)이 짧아서 남던 여백을 줄이고, 아래쪽은
-     X축 라벨이 카드 하단에 바짝 붙어보이던 걸 늘려서 균형을 맞춤
-     (2026-09 피드백) */
-  padding: 4px 8px 12px 2px;
+  /* 왼쪽은 Y축 라벨("20억" 등)이 짧아서 남던 여백을 줄임(2026-09 피드백).
+     아래쪽은 한 번 늘렸다가(카드 하단에 라벨이 바짝 붙어보였던 문제),
+     카드가 커지는(전체화면 등) 경우 그 12px+LineChart 자체 마진이 겹쳐
+     아래가 비어 보인다는 피드백을 받아 다시 줄이고, 대신 LineChart의
+     margin.bottom/tickMargin을 다른 실데이터 차트(TradeVolumeLiquidityChart
+     등)와 같은 값으로 맞춰 라벨이 잘리지 않게 했다. */
+  padding: 4px 8px 4px 2px;
 }
 .price-trend-chart__empty {
   display: flex;
@@ -2080,7 +2221,7 @@ select:focus-visible {
   justify-content: center;
   gap: 6px;
   height: 100%;
-  font-size: 12.5px;
+  font-size: 0.7812rem;
   color: var(--color-text-subtle);
   text-align: center;
 }
@@ -2089,7 +2230,8 @@ select:focus-visible {
   display: flex;
   flex-direction: column;
   gap: clamp(4px, 1.5vh, 10px);
-  height: 100%;
+  flex: 1;
+  min-height: 0;
   padding-top: 6px;
 }
 .trade-distribution-chart__header-right {
@@ -2102,7 +2244,7 @@ select:focus-visible {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: clamp(11px, 1.5vh, 12px);
+  font-size: clamp(0.6875rem, 1.5vh, 0.75rem);
   color: #6b7280;
   font-weight: 500;
 }
@@ -2123,7 +2265,7 @@ select:focus-visible {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-size: clamp(11px, 1.5vh, 12px);
+  font-size: clamp(0.6875rem, 1.5vh, 0.75rem);
   color: #4b5563;
   font-weight: 600;
 }
@@ -2133,7 +2275,7 @@ select:focus-visible {
   border-radius: 8px;
   background: #fff;
   padding: clamp(2px, 0.6vh, 4px) 10px;
-  font-size: clamp(11px, 1.5vh, 12px);
+  font-size: clamp(0.6875rem, 1.5vh, 0.75rem);
   color: #111827;
   font-weight: 500;
   outline: none;
@@ -2170,7 +2312,7 @@ select:focus-visible {
   border: none;
   border-radius: var(--radius-full);
   background: transparent;
-  font-size: clamp(11px, 1.5vh, 12px);
+  font-size: clamp(0.6875rem, 1.5vh, 0.75rem);
   font-weight: 600;
   color: #6b7280;
   transition: color 0.22s ease;
@@ -2195,9 +2337,14 @@ select:focus-visible {
      그대로 반영하는 방식으로 해결했기 때문에(1 unit = 1px), CSS에서
      높이를 고정 px로 못 박아 둘 필요가 없다 - 오히려 카드의 실제 가용
      높이가 그 고정값보다 크면 아래쪽에 빈 공간이 남는 부작용이 있었다.
-     flex:1로 남는 공간을 그대로 채운다. */
+     flex:1로 남는 공간을 그대로 채운다.
+     (병합 메모: flex-grow가 0.95처럼 1이 아닌 값이면 - 이 wrap 안에서
+     자라는 요소가 이거 하나뿐이어도 - 남는 공간을 100% 다 못 채우고
+     그만큼 아래에 빈 공간이 남는다. 카드가 커질수록(전체화면 등) 그
+     gap도 비례해서 커져서 눈에 띈다(2026-09 피드백 - "전체화면으로
+     열면 아래가 빔") - 0.95를 1로 고쳤다.) */
   position: relative;
-  flex: 0.95;
+  flex: 1;
   width: 100%;
   min-height: 0;
   padding: 4px;
@@ -2209,7 +2356,7 @@ select:focus-visible {
   justify-content: center;
   gap: 6px;
   height: 100%;
-  font-size: 12.5px;
+  font-size: 0.7812rem;
   color: var(--color-text-subtle);
   text-align: center;
 }
@@ -2233,7 +2380,7 @@ select:focus-visible {
   /* 실거래가 추이(PriceTrendChart) 등 다른 차트의 아이템 이름 라벨과
      동일한 폰트 크기/색으로 통일(2026-09 피드백 - y축 텍스트도 같이
      맞춰달라는 요청) */
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 500;
   fill: #6b7280;
 }
@@ -2246,13 +2393,44 @@ select:focus-visible {
   fill: var(--color-primary);
   stroke: #fff;
   stroke-width: 1.5;
+  /* 일반 실거래 점(회색)들 사이에서 눈에 잘 안 띈다는 피드백(2026-09) -
+     천천히 두 번 옅어졌다 돌아오고, 한참 그대로 있다가 다시 반복한다
+     (계속 깜빡이면 정신없어 보여서 "쉬는 구간"을 훨씬 길게 뒀다). */
+  animation: trade-distribution-ask-dot-blink 5s ease-in-out infinite;
+  transform-origin: center;
+}
+@keyframes trade-distribution-ask-dot-blink {
+  0%,
+  60%,
+  100% {
+    opacity: 1;
+  }
+  15%,
+  45% {
+    opacity: 0.35;
+  }
+  30% {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .trade-distribution-chart__ask-dot {
+    animation: none;
+  }
 }
 .trade-distribution-chart__item-label {
   /* 실거래가 추이(PriceTrendChart) 축 라벨과 동일한 폰트 크기/색으로
      통일(2026-09 피드백 - 차트마다 아이템 이름 폰트가 서로 달라 보임) */
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 500;
   fill: #6b7280;
+}
+.trade-distribution-chart__col-highlight {
+  /* 다른 실데이터 차트(TradeVolumeLiquidityChart 등)의
+     <Tooltip cursor={{ fill: "rgba(17,17,17,0.03)" }} />와 동일한 색으로
+     맞춘 호버 배경(2026-09 피드백). */
+  fill: rgba(17, 17, 17, 0.03);
+  pointer-events: none;
 }
 .trade-distribution-chart__col-hit {
   fill: transparent;
@@ -2283,7 +2461,7 @@ select:focus-visible {
   pointer-events: none;
 }
 .trade-distribution-chart__tooltip-title {
-  font-size: 12.5px;
+  font-size: 0.7812rem;
   font-weight: 700;
   color: #111;
   margin-bottom: 6px;
@@ -2293,7 +2471,7 @@ select:focus-visible {
   align-items: center;
   justify-content: space-between;
   gap: 14px;
-  font-size: 12px;
+  font-size: 0.75rem;
   line-height: 1.6;
 }
 .trade-distribution-chart__tooltip-row
@@ -2330,7 +2508,8 @@ select:focus-visible {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  height: 100%;
+  flex: 1;
+  min-height: 0;
 }
 .jeonse-sale-gap-chart__stats {
   display: flex;
@@ -2344,12 +2523,12 @@ select:focus-visible {
   flex: 1;
 }
 .jeonse-sale-gap-chart__label {
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 600;
   color: var(--color-text-secondary);
 }
 .jeonse-sale-gap-chart__stats strong {
-  font-size: 18px;
+  font-size: 1.125rem;
   font-weight: 800;
   letter-spacing: -0.03em;
   color: var(--color-ink);
@@ -2383,7 +2562,7 @@ select:focus-visible {
   justify-content: center;
   gap: 6px;
   height: 100%;
-  font-size: 12.5px;
+  font-size: 0.7812rem;
   color: var(--color-text-subtle);
   text-align: center;
 }
@@ -2397,7 +2576,8 @@ select:focus-visible {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  height: 100%;
+  flex: 1;
+  min-height: 0;
   padding-top: 6px;
 }
 .trade-volume-liquidity-chart__header-right {
@@ -2413,7 +2593,7 @@ select:focus-visible {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 600;
   color: var(--color-text-secondary);
 }
@@ -2429,7 +2609,7 @@ select:focus-visible {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-size: clamp(11px, 1.5vh, 12px);
+  font-size: clamp(0.6875rem, 1.5vh, 0.75rem);
   color: #4b5563;
   font-weight: 600;
 }
@@ -2439,7 +2619,7 @@ select:focus-visible {
   border-radius: 8px;
   background: #fff;
   padding: clamp(2px, 0.6vh, 4px) 10px;
-  font-size: clamp(11px, 1.5vh, 12px);
+  font-size: clamp(0.6875rem, 1.5vh, 0.75rem);
   color: #111827;
   font-weight: 500;
   outline: none;
@@ -2458,35 +2638,9 @@ select:focus-visible {
   justify-content: center;
   gap: 6px;
   height: 100%;
-  font-size: 12.5px;
+  font-size: 0.7812rem;
   color: var(--color-text-subtle);
   text-align: center;
-}
-@media (max-width: 900px) {
-  .dashboard {
-    flex-direction: column;
-    overflow-y: auto;
-  }
-  .dashboard-list {
-    width: 100%;
-    max-height: none;
-    overflow-y: visible;
-    flex-direction: row;
-    flex-wrap: wrap;
-  }
-  .dashboard-list > * {
-    width: 100%;
-  }
-  .dashboard-charts {
-    max-height: none;
-    overflow-y: visible;
-    grid-template-columns: 1fr;
-    grid-template-rows: auto;
-    grid-template-areas: "left" "side";
-  }
-  .chart-sub-row {
-    flex-direction: column;
-  }
 }
 
 .interest-row {
@@ -2494,8 +2648,8 @@ select:focus-visible {
   align-items: stretch;
   gap: 3px;
   flex: 1 1 0;
-  min-height: 130px;
-  max-height: 140px;
+  min-height: 100px;
+  max-height: 132px;
   /* 매물이 새로 추가되면(= 이 row가 새 DOM 노드로 처음 마운트되면) 아래에서
      위로 살짝 올라오면서 자리를 잡는다. key가 바뀌지 않는 기존 row는
      리렌더돼도 같은 DOM 노드를 재사용하니 재생되지 않고, "+ 매물 추가하기"
@@ -2603,7 +2757,7 @@ select:focus-visible {
 }
 .interest-card-name {
   margin-top: 6px;
-  font-size: clamp(14px, 1.9vh, 16px);
+  font-size: clamp(0.8rem, 1.9vh, 0.9rem);
   font-weight: 700;
   line-height: 1.25;
   width: 100%;
@@ -2612,10 +2766,12 @@ select:focus-visible {
   white-space: nowrap;
 }
 .interest-card-size {
-  margin-top: 4px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid var(--color-border-subtle);
-  font-size: clamp(12px, 1.5vh, 14px);
+  /* 원래 이 아래로 규제 뱃지 줄(.interest-card-badges)이 있어서 구분선 +
+     여백을 뒀는데, 뱃지를 매물 정보 모달로 옮기면서(2026-09 피드백) 카드
+     맨 아래에 남는 줄이 됐다 - 구분선/여백 제거하고 카드가 다시 내용
+     높이만큼만 딱 맞게 줄어들도록. */
+  margin-top: 6px;
+  font-size: clamp(0.75rem, 1.5vh, 0.875rem);
   line-height: 1.25;
   color: var(--color-text-secondary);
 }
@@ -2623,19 +2779,13 @@ select:focus-visible {
   color: var(--color-text-subtle);
 }
 
-.interest-card-badges {
-  margin-top: 6px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
 .reg-badge {
   display: inline-flex;
   align-items: center;
   height: 22px;
   padding: 0 10px;
   border-radius: var(--radius-full);
-  font-size: clamp(10px, 1.4vh, 10px);
+  font-size: clamp(0.625rem, 1.4vh, 0.625rem);
   font-weight: 700;
   white-space: nowrap;
   letter-spacing: -0.02em;
@@ -2702,7 +2852,7 @@ select:focus-visible {
   border: 1px solid var(--color-border-strong);
   border-radius: var(--radius-full);
   background: var(--color-panel);
-  font-size: 13.5px;
+  font-size: 0.8438rem;
   font-weight: 600;
   color: var(--color-text-secondary);
 }
@@ -2763,7 +2913,7 @@ select:focus-visible {
   border: none;
   background: none;
   padding: 4px 0;
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 600;
   color: var(--color-text-secondary);
 }
@@ -2793,7 +2943,7 @@ select:focus-visible {
 
 .modal-title {
   margin: 4px 0 0;
-  font-size: 25px;
+  font-size: 1.5625rem;
   line-height: 1.4;
   font-weight: 800;
   letter-spacing: -0.01em;
@@ -2801,7 +2951,7 @@ select:focus-visible {
 }
 .modal-subtext {
   margin: 8px 0 0;
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 500;
   color: var(--color-text-subtle);
 }
@@ -2817,7 +2967,7 @@ select:focus-visible {
   border-radius: var(--radius-md);
   background: var(--color-surface-subtle);
   padding: 0 50px 0 18px;
-  font-size: 16px;
+  font-size: 1rem;
   color: var(--color-ink);
 }
 .search-submit {
@@ -2862,17 +3012,17 @@ select:focus-visible {
   gap: 4px;
 }
 .result-name {
-  font-size: 16px;
+  font-size: 1rem;
   font-weight: 600;
   color: var(--color-ink-2);
 }
 .result-sub {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--color-text-subtle);
 }
 .empty-state {
   margin-top: 24px;
-  font-size: 14px;
+  font-size: 0.875rem;
   color: var(--color-text-subtle);
   text-align: center;
   padding: 24px 0;
@@ -2888,17 +3038,17 @@ select:focus-visible {
   justify-content: space-between;
 }
 .complex-name {
-  font-size: 21px;
+  font-size: 1.3125rem;
   font-weight: 800;
 }
 .complex-sub {
   margin-top: 6px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--color-text-subtle);
 }
 .complex-size-tag {
   margin-top: 6px;
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 600;
   color: var(--color-text-secondary);
 }
@@ -2906,7 +3056,7 @@ select:focus-visible {
   border: none;
   background: none;
   padding: 0;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
   color: var(--color-text-subtle);
   text-decoration: underline;
@@ -2951,13 +3101,13 @@ select:focus-visible {
   font-weight: 800;
 }
 .size-tab-title {
-  font-size: 14.5px;
+  font-size: 0.9062rem;
   font-weight: 700;
   color: var(--color-ink-2);
   white-space: nowrap;
 }
 .size-tab-price {
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: var(--color-text-subtle);
   white-space: nowrap;
 }
@@ -2979,7 +3129,7 @@ select:focus-visible {
   animation: slideDown 0.22s ease-out;
 }
 .price-field-label {
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 700;
 }
 .price-field input {
@@ -2989,13 +3139,13 @@ select:focus-visible {
   border-radius: var(--radius-md);
   background: #ffffff;
   padding: 0 18px;
-  font-size: 17px;
+  font-size: 1.0625rem;
   color: var(--color-ink);
   font-variant-numeric: tabular-nums;
 }
 .price-helper {
   margin: 10px 0 0;
-  font-size: 13px;
+  font-size: 0.8125rem;
   line-height: 1.6;
   color: var(--color-text-subtle);
 }
@@ -3041,13 +3191,13 @@ select:focus-visible {
   outline-color: transparent;
 }
 .accordion-title {
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 700;
   color: var(--color-ink);
 }
 .accordion-hint {
   margin-left: 8px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--color-text-subtle);
 }
 .accordion-chevron {
@@ -3078,10 +3228,10 @@ select:focus-visible {
   margin-top: 18px;
 }
 .field-block:first-child {
-  margin-top: 2px;
+  margin-top: 12px;
 }
 .field-block-label {
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
   color: var(--color-ink-2);
 }
@@ -3098,7 +3248,7 @@ select:focus-visible {
   border-radius: var(--radius-md);
   background: #ffffff;
   padding: 0 14px;
-  font-size: 14.5px;
+  font-size: 0.9062rem;
   color: var(--color-ink);
 }
 .field-sep {
@@ -3141,12 +3291,12 @@ select:focus-visible {
   border-radius: inherit;
   background: transparent;
   padding: 0 34px 0 14px;
-  font-size: 14.5px;
+  font-size: 0.9062rem;
   color: var(--color-ink);
 }
 .field-small.field-suffix-wrap .field-suffix {
   right: 14px;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .chip-row {
@@ -3181,7 +3331,7 @@ select:focus-visible {
   align-items: center;
   border: none;
   border-radius: var(--radius-full);
-  font-size: 13.5px;
+  font-size: 0.8438rem;
   font-weight: 600;
   cursor: pointer;
   /* 기존엔 평소 배경(--color-surface-muted, #ddd 진한 회색)이 호버 배경
@@ -3216,7 +3366,7 @@ select:focus-visible {
   height: var(--control-height-lg);
   border: none;
   border-radius: var(--radius-md);
-  font-size: 16px;
+  font-size: 1rem;
   font-weight: 700;
   transition: background 0.15s ease;
 }
@@ -3255,13 +3405,18 @@ select:focus-visible {
 .edit-dialog {
   position: relative;
   width: min(420px, 100%);
-  max-height: 573px;
-  overflow-y: auto;
-  overflow-x: hidden;
+  height: 90vh;
+  max-height: 615px;
+  /* 헤더/액션 영역을 스크롤 위로 고정하기 위해(2026-09 피드백) 이 박스
+     자체는 더 이상 스크롤하지 않는다 - flex column으로 헤더/패널/액션을
+     세로로 쌓고, 실제 스크롤은 가운데 .edit-dialog-panel만 담당한다.
+     overflow: hidden은 둥근 모서리 밖으로 내용이 삐져나오지 않게. */
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
   background: var(--color-panel);
   border-radius: var(--radius-2xl);
   box-shadow: 0 20px 48px rgba(17, 17, 17, 0.22);
-  padding: 26px 26px 22px;
   transform: scale(0.96) translateY(6px);
   transition: transform 0.18s ease;
 }
@@ -3293,36 +3448,63 @@ select:focus-visible {
   }
 }
 .edit-dialog-title {
-  font-size: 16px;
+  font-size: 1rem;
   font-weight: 700;
 }
+.edit-dialog-name-row {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  column-gap: 8px;
+  row-gap: 4px;
+}
 .edit-dialog-name {
-  margin-top: 6px;
-  font-size: 14px;
+  font-size: 0.875rem;
   color: var(--color-ink);
+  white-space: nowrap;
+}
+.edit-dialog-badges {
+  display: flex;
+  gap: 4px;
+}
+/* 규제 뱃지를 매물 정보 모달의 좁은 이름 줄 안에 넣기 위한 축소판
+   (2026-09 피드백 - 대시보드 카드에서 쓰던 .reg-badge 크기가 여기서는
+   너무 커 보임). 배경/글자색은 .reg-badge--overheated 등 기존 색상
+   클래스를 그대로 같이 쓰고, 크기만 여기서 덮어쓴다. */
+.reg-badge--tiny {
+  height: 16px;
+  padding: 0 6px;
+  font-size: 0.5625rem;
 }
 .edit-dialog-header {
+  flex-shrink: 0;
+  padding: 26px 26px 16px;
+  background: var(--color-panel);
+  border-bottom: 1px solid var(--color-border-subtle);
+  display: flex;
+  flex-direction: column;
+}
+.edit-dialog-header-top {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
 }
 .edit-dialog-checklist-btn {
-  border-radius: 8px;
-  background: var(--color-border-subtle);
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  border-radius: var(--radius-md);
   height: 28px;
-  color: var(--color-ink-2);
   white-space: nowrap;
   cursor: pointer;
-  border: none;
-  flex-shrink: 0;
   align-items: center;
-  gap: 6px;
-  margin-right: 24px;
-  margin-top: -8px;
   padding: 0 8px;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
+  position: absolute;
+  top: 16px;
+  right: 54px;
   transition:
     background 0.15s,
     color 0.15s;
@@ -3332,12 +3514,47 @@ select:focus-visible {
   background: var(--color-surface-muted);
   color: var(--color-ink);
 }
+/* 비로그인 체크리스트 확인 팝업 - "팝업 위의 팝업"(2026-09-17). .edit-dialog가
+   overflow:hidden + position:relative라 absolute 오버레이를 그 안에 깔면
+   둥근 모서리 밖으로 안 삐져나오면서 매물 정보 팝업 자체를 덮는 모양이 된다. */
+.checklist-guest-confirm-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(17, 17, 17, 0.32);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  z-index: 5;
+}
+.checklist-guest-confirm {
+  width: 100%;
+  max-width: 280px;
+  background: var(--color-panel);
+  border-radius: var(--radius-xl);
+  padding: 20px;
+  box-shadow: 0 12px 32px rgba(17, 17, 17, 0.2);
+}
+.checklist-guest-confirm-message {
+  margin: 0 0 16px;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--color-ink);
+  text-align: center;
+}
+.checklist-guest-confirm-actions {
+  display: flex;
+  gap: 10px;
+}
 .edit-dialog .price-field {
   margin-top: 20px;
   animation: none;
 }
 .edit-dialog-actions {
-  margin-top: 22px;
+  flex-shrink: 0;
+  padding: 16px 26px 22px;
+  background: var(--color-panel);
+  border-top: 1px solid var(--color-border-subtle);
   display: flex;
   gap: 10px;
 }
@@ -3347,7 +3564,7 @@ select:focus-visible {
   height: var(--control-height-md);
   border: none;
   border-radius: var(--radius-md);
-  font-size: 14.5px;
+  font-size: 0.9062rem;
   font-weight: 700;
   transition: background 0.15s ease;
 }
@@ -3367,6 +3584,10 @@ select:focus-visible {
 }
 
 .edit-dialog-panel {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 26px 20px;
   animation: editPanelEnterLeft 0.22s ease-out;
 }
 .edit-dialog-panel.is-checklist-panel {
@@ -3411,13 +3632,30 @@ select:focus-visible {
   gap: 8px;
   border: none;
   background: none;
-  font-size: 13px;
+  /* 사파리는 <button>이 -webkit-appearance를 안 지우면 포커스 시 OS 기본
+     컨트롤 스타일(halo)을 씌우는데, 이 halo는 outline 속성이 아니라 accent-color
+     (전역에서 var(--color-primary)로 지정돼 있음, 693번째 줄)를 그대로 따라가서
+     outline:none을 걸어도 안 지워진다. select와 동일한 이유로 appearance까지
+     같이 꺼야 한다. */
+  -webkit-appearance: none;
+  appearance: none;
+  font-size: 0.8125rem;
   font-weight: 700;
   color: var(--color-ink-2);
   margin-bottom: 4px;
   padding-bottom: 12px;
   border-bottom: 1px solid var(--color-border-subtle);
   cursor: pointer;
+}
+/* button:focus/:focus-visible 전역 규칙(outline: 2px solid var(--color-primary))이
+   element+pseudo-class라 .checklist-group-title 단독 class보다 명시도가 높아서
+   단순히 outline: none만 걸면 초록 아웃라인이 그대로 남는다. 같은 패턴을 쓰는
+   .header-content-tab / .username-check-btn 등과 동일하게 :focus까지 같이
+   지정해서 명시도를 맞춰 덮어쓴다. */
+.checklist-group-title:focus,
+.checklist-group-title:focus-visible {
+  outline: none;
+  border-color: (var(--color-primary-hover));
 }
 .checklist-group-chevron {
   flex-shrink: 0;
@@ -3426,8 +3664,30 @@ select:focus-visible {
 .checklist-group-chevron.is-collapsed {
   transform: rotate(180deg);
 }
+/* 그룹 펼침/접힘을 뚝뚝 끊기지 않고 부드럽게: 항목들을 조건부 렌더링으로
+   마운트/언마운트하면(예전 방식) 트랜지션이 걸릴 수 없어서 순간적으로
+   나타나고 사라졌다(2026-09 피드백). 대신 항상 DOM에 두고, grid-template-rows를
+   0fr <-> 1fr로 애니메이션하는 방식으로 바꿨다 - height: auto는 CSS만으로
+   트랜지션이 안 되지만 grid-template-rows의 fr 값은 트랜지션이 걸린다.
+   안쪽 -inner에 overflow: hidden을 줘야 축소되는 동안 내용이 넘치지 않는다. */
+.checklist-group-body {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.28s ease;
+}
+.checklist-group-body.is-expanded {
+  grid-template-rows: 1fr;
+}
+.checklist-group-body-inner {
+  overflow: hidden;
+}
+@media (prefers-reduced-motion: reduce) {
+  .checklist-group-body {
+    transition: none;
+  }
+}
 .checklist-option-row {
-  margin-top: 8px;
+  margin-top: 16px;
   display: flex;
   flex-wrap: wrap;
   row-gap: 10px;
@@ -3451,7 +3711,7 @@ select:focus-visible {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 13.5px;
+  font-size: 0.8438rem;
   color: var(--color-text-secondary);
   cursor: pointer;
   transition: color 0.15s ease;
@@ -3467,6 +3727,37 @@ select:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 3px;
   border-radius: var(--radius-sm);
+}
+
+/* 체크리스트 최하단 자유 메모 (2026-09 피드백) - 위 그룹들과 구분되도록
+   옅은 구분선으로 띄우고, 텍스트 입력칸은 .auth-field input과 같은
+   톤(테두리/라운드/포커스 색)으로 맞춘다. */
+.checklist-memo {
+  margin-top: 0;
+  padding-top: 24px;
+  border-top: 1px solid var(--color-border-subtle);
+}
+.checklist-memo-input {
+  display: block;
+  width: 100%;
+  min-height: 100px;
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 12px;
+  background: var(--color-panel);
+  font-family: inherit;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--color-ink);
+  resize: none;
+}
+.checklist-memo-input::placeholder {
+  color: var(--color-text-faint);
+}
+.checklist-memo-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
 }
 
 @keyframes riseIn {
@@ -3500,7 +3791,7 @@ select:focus-visible {
   color: #ffffff;
   padding: 14px 22px;
   border-radius: var(--radius-lg);
-  font-size: 14.5px;
+  font-size: 0.9062rem;
   font-weight: 600;
   box-shadow: 0 8px 24px rgba(17, 17, 17, 0.22);
   opacity: 0;
@@ -3531,7 +3822,7 @@ select:focus-visible {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 600;
   color: var(--color-text-secondary);
   text-decoration: none;
@@ -3584,19 +3875,19 @@ select:focus-visible {
 .insights-eyebrow {
   margin: 0 0 10px;
   color: var(--color-primary-hover) !important;
-  font-size: 12px !important;
+  font-size: 0.75rem !important;
   font-weight: 800;
   letter-spacing: 0.14em;
 }
 .insights-heading h1 {
   margin: 0;
-  font-size: clamp(30px, 5vw, 44px);
+  font-size: clamp(1.875rem, 5vw, 2.75rem);
   letter-spacing: -0.04em;
 }
 .insights-heading p {
   margin: 14px 0 0;
   color: var(--color-text-secondary);
-  font-size: 16px;
+  font-size: 1rem;
 }
 .insights-tabs {
   display: grid;
@@ -3614,7 +3905,7 @@ select:focus-visible {
   border-radius: var(--radius-md);
   background: transparent;
   color: var(--color-text-secondary);
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 700;
 }
 .insights-tabs button:hover {
@@ -3635,7 +3926,7 @@ select:focus-visible {
   display: flex;
   gap: 10px;
   color: var(--color-text-muted);
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 .news-meta span::after {
   content: "·";
@@ -3643,7 +3934,7 @@ select:focus-visible {
 }
 .news-item h2 {
   margin: 10px 0 8px;
-  font-size: 19px;
+  font-size: 1.1875rem;
   line-height: 1.45;
   letter-spacing: -0.02em;
 }
@@ -3661,12 +3952,12 @@ select:focus-visible {
 .news-item > p {
   margin: 0;
   color: var(--color-text-secondary);
-  font-size: 14.5px;
+  font-size: 0.9062rem;
   line-height: 1.75;
 }
 .news-message {
   padding: 60px 20px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--color-ink-2);
   text-align: center;
 }
@@ -3686,22 +3977,6 @@ select:focus-visible {
 }
 .news-error {
   color: var(--color-danger);
-}
-@media (max-width: 600px) {
-  .insights-main {
-    width: min(100% - 28px, 920px);
-    padding-top: 48px;
-  }
-  .insights-tabs {
-    margin-top: 32px;
-  }
-  .insights-tabs button {
-    padding: 0 6px;
-    font-size: 13px;
-  }
-  .news-item {
-    padding: 24px 2px;
-  }
 }
 
 /* ---------- Insights dashboard layout ---------- */
@@ -3733,10 +4008,10 @@ select:focus-visible {
   background: var(--color-panel);
 }
 .insights-property-placeholder strong {
-  font-size: 17px;
+  font-size: 1.0625rem;
 }
 .insights-property-placeholder > span:last-child {
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 .insights-property-check {
   position: absolute;
@@ -3753,7 +4028,7 @@ select:focus-visible {
   place-items: center;
   background: #e7e8e9;
   color: var(--color-text-muted);
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 .insights-content {
   min-width: 0;
@@ -3765,7 +4040,7 @@ select:focus-visible {
   gap: 32px;
   min-height: 58px;
   color: var(--color-text-muted);
-  font-size: 20px;
+  font-size: 1.25rem;
 }
 .insights-view-tabs strong {
   color: var(--color-ink);
@@ -3778,7 +4053,7 @@ select:focus-visible {
   place-items: center;
   background: #dedede;
   color: #ffffff;
-  font-size: clamp(36px, 5vw, 56px);
+  font-size: clamp(2.25rem, 5vw, 3.5rem);
   font-weight: 800;
 }
 .insights-dashboard {
@@ -3807,13 +4082,13 @@ select:focus-visible {
 .dashboard-card-header h2 {
   margin: 0;
   color: #2563eb;
-  font-size: clamp(22px, 2.2vw, 30px);
+  font-size: clamp(1.375rem, 2.2vw, 1.875rem);
   letter-spacing: -0.04em;
 }
 .more-link {
   flex: 0 0 auto;
   color: var(--color-text-secondary);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
 }
 .news-list-item {
@@ -3823,7 +4098,7 @@ select:focus-visible {
   gap: 10px;
   min-height: 48px;
   border-bottom: 1px solid var(--color-border-subtle);
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 .news-list-item a {
   min-width: 0;
@@ -3838,46 +4113,17 @@ select:focus-visible {
 }
 .news-list-item time {
   color: var(--color-text-muted);
-  font-size: 12px;
+  font-size: 0.75rem;
   white-space: nowrap;
 }
 .badge-hot {
   color: #dc2626;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 900;
   white-space: nowrap;
 }
 .dashboard-card .news-message {
   padding: 64px 24px;
-}
-
-@media (max-width: 980px) {
-  .insights-layout {
-    grid-template-columns: 210px minmax(0, 1fr);
-  }
-  .insights-sidebar {
-    padding: 18px;
-  }
-  .insights-dashboard {
-    grid-template-columns: 1fr;
-  }
-}
-@media (max-width: 700px) {
-  .insights-layout {
-    display: block;
-  }
-  .insights-sidebar {
-    display: none;
-  }
-  .insights-content {
-    padding: 22px 16px 56px;
-  }
-  .insights-ai-placeholder {
-    min-height: 170px;
-  }
-  .dashboard-card-header {
-    padding: 24px 22px 16px;
-  }
 }
 
 /* ---------- 그룹 저장/불러오기 (GroupBar) ---------- */
@@ -3986,13 +4232,13 @@ select:focus-visible {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 600;
   color: var(--color-text-secondary);
 }
 .group-row-count {
   flex-shrink: 0;
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 700;
   color: var(--color-text-subtle);
 }
@@ -4024,7 +4270,7 @@ select:focus-visible {
 }
 .group-bar-empty {
   margin: 6px 8px;
-  font-size: 11.5px;
+  font-size: 0.7188rem;
   color: var(--color-text-subtle);
 }
 /* 그룹 줄의 "추가" - 카드에서 체크한 후보를 이 그룹에 넣는다. 체크가 없으면 비활성. */
@@ -4037,7 +4283,7 @@ select:focus-visible {
   background: var(--color-panel);
   box-shadow: inset 0 0 0 1px var(--color-border-strong);
   color: var(--color-text-secondary);
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 700;
 }
 .group-row-add:hover {
@@ -4116,7 +4362,7 @@ select:focus-visible {
   border: 1px solid var(--color-primary);
   border-radius: var(--radius-md);
   background: var(--color-surface);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
   color: var(--color-ink);
   outline: none;
@@ -4134,7 +4380,7 @@ select:focus-visible {
   border-radius: var(--radius-md);
   background: transparent;
   color: var(--color-ink);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 700;
 }
 .group-bar-create:hover {
@@ -4176,7 +4422,7 @@ select:focus-visible {
   background: var(--color-surface);
 }
 .share-preview-name {
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 700;
   color: var(--color-ink);
   overflow: hidden;
@@ -4185,7 +4431,7 @@ select:focus-visible {
 }
 .share-preview-size {
   flex-shrink: 0;
-  font-size: 12.5px;
+  font-size: 0.7812rem;
   color: var(--color-text-subtle);
 }
 
@@ -4233,7 +4479,7 @@ select:focus-visible {
 }
 .subscription-status {
   flex-shrink: 0;
-  font-size: 11px;
+  font-size: 0.6875rem;
   padding: 4px 10px;
   border-radius: 10px;
   background: #edf1f5;
@@ -4254,7 +4500,7 @@ select:focus-visible {
   justify-content: flex-end;
   align-items: center;
   gap: 8px 12px;
-  font-size: 12px;
+  font-size: 0.75rem;
   margin-right: 20px;
 }
 .subscription-filter {
@@ -4264,8 +4510,21 @@ select:focus-visible {
   color: #737373;
   font-size: inherit;
   white-space: nowrap;
+  outline: none;
 }
-.subscription-filter > span {
+.subscription-filter:focus,
+.subscription-filter:focus-visible {
+  outline: none;
+  font-weight: 600;
+}
+.subscription-filter:focus span,
+.subscription-filter:focus-visible span {
+  color: #2563eb;
+}
+.subscription-region-trigger:hover
+  .subscription-region-chevron
+  .subscription-filter
+  > span {
   color: #b6b6b6;
 }
 .subscription-region-trigger {
@@ -4342,7 +4601,9 @@ select:focus-visible {
   background: transparent;
   padding: 7px 10px;
   color: #525252;
-  transition: background 0.15s ease, color 0.15s ease;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
 }
 .subscription-region-option:hover,
 .subscription-region-option:focus-visible {
@@ -4413,8 +4674,8 @@ select:focus-visible {
    항목 목록(.checklist-group) 아래에 붙는 마지막 블록이라 위쪽 구분선을 준다. */
 .checklist-rating {
   border-top: 1px solid var(--line, #e5e7eb);
-  padding-top: 14px;
-  margin-top: 4px;
+  padding-top: 24px;
+  margin-top: 24px;
 }
 .checklist-rating .field-block-label {
   display: flex;
@@ -4445,6 +4706,7 @@ select:focus-visible {
   font-size: 11px;
   font-weight: 700;
   vertical-align: middle;
+  margin-top: -1px;
 }
 
 /* 그룹 메뉴의 "점수" 버튼과 펼쳐지는 가중치 편집 영역. */
@@ -4530,9 +4792,9 @@ select:focus-visible {
   vertical-align: middle;
 }
 .checklist-rating-help-btn[aria-expanded="true"] {
-  border-color: var(--main, #2f6df6);
-  background: var(--main, #2f6df6);
-  color: #fff;
+  border-color: var(--color-border-strong, #e5e7eb);
+  background: var(--color-surface-muted);
+  color: var(--color-text-secondary);
 }
 .checklist-weights {
   margin-top: 8px;
@@ -4547,7 +4809,7 @@ select:focus-visible {
   color: #374151;
 }
 .checklist-weights-source strong {
-  color: var(--main, #2f6df6);
+  color: var(--color-primary);
 }
 .checklist-weights-row {
   display: flex;
@@ -4584,8 +4846,8 @@ select:focus-visible {
   cursor: default;
 }
 .checklist-weights-save {
-  border-color: var(--main, #2f6df6) !important;
-  background: var(--main, #2f6df6) !important;
+  border-color: var(--color-primary) !important;
+  background: var(--color-primary) !important;
   color: #fff;
   font-weight: 600;
 }

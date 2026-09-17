@@ -79,23 +79,29 @@ def get_personalized_subscription(
 
 @router.get("/nearby", summary="화면 최상위 매물의 지역 기준 청약 목록")
 def get_nearby_subscription(
-    size_id: int = Query(ge=1),
+    size_id: int | None = Query(default=None, ge=1),
     limit_per_region: int = Query(default=30, ge=1, le=30),
     db: Session = Depends(get_db),
     exclude_closed: bool = False,
 ):
-    # 공개 단지·평형 정보만 조회한다. 사용자나 비공개 관심 매물 정보는 조회하지 않는다.
-    code = db.execute(
-        select(ComplexMaster.sgg_cd)
-        .select_from(SizeMaster)
-        .join(ComplexMaster, ComplexMaster.id == SizeMaster.complex_id)
-        .where(SizeMaster.id == size_id)
-    ).scalar_one_or_none()
-    if code is None:
-        raise HTTPException(status_code=404, detail="기준 매물의 지역 정보를 찾을 수 없습니다.")
-    preferred = preferred_regions_from_codes([code])
-    if not preferred:
-        raise HTTPException(status_code=422, detail="기준 매물의 지역 코드를 확인할 수 없습니다.")
+    # size_id가 없으면(등록된 관심 매물이 하나도 없는 사용자/게스트) 지역 우선순위
+    # 없이 전체 지역 기준으로 보여준다 - 2026-09-17: "아이템 등록 여부와 무관하게
+    # 청약정보는 노출되어야 한다"는 요청 반영. 지역 우선순위만 못 매기는 것이지
+    # 청약 목록 자체를 숨길 이유는 없다.
+    preferred = []
+    if size_id is not None:
+        # 공개 단지·평형 정보만 조회한다. 사용자나 비공개 관심 매물 정보는 조회하지 않는다.
+        code = db.execute(
+            select(ComplexMaster.sgg_cd)
+            .select_from(SizeMaster)
+            .join(ComplexMaster, ComplexMaster.id == SizeMaster.complex_id)
+            .where(SizeMaster.id == size_id)
+        ).scalar_one_or_none()
+        if code is None:
+            raise HTTPException(status_code=404, detail="기준 매물의 지역 정보를 찾을 수 없습니다.")
+        preferred = preferred_regions_from_codes([code])
+        if not preferred:
+            raise HTTPException(status_code=422, detail="기준 매물의 지역 코드를 확인할 수 없습니다.")
     # DB 조회는 여기서 끝난다. 아래 청약홈 API를 기다리는 동안 트랜잭션을 열어두면
     # DB 연결을 쥔 채 기다리게 되므로 먼저 끝낸다.
     db.commit()

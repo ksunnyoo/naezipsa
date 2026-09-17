@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import ChipGroup from "./ChipGroup";
 import InspectionChecklist from "./InspectionChecklist";
 import { CloseIcon } from "./icons";
-import { DIRECTIONS, INTERIORS } from "@/lib/data";
+import { DIRECTIONS, INTERIORS, REGULATIONS } from "@/lib/data";
 import {
   EMPTY_CHECKLIST,
   WEIGHT_CATEGORIES,
@@ -53,11 +53,13 @@ export default function EditListingDialog({
   open,
   item,
   initialChecklist,
+  guest,
   group,
   profile,
   onSave,
   onSaveWeights,
   onCancel,
+  onRequestLogin,
 }) {
   const [price, setPrice] = useState("");
   const [floor, setFloor] = useState("");
@@ -66,6 +68,11 @@ export default function EditListingDialog({
   const [direction, setDirection] = useState(null);
   const [interior, setInterior] = useState(null);
   const [showChecklist, setShowChecklist] = useState(false);
+  // 비로그인 상태에서 체크리스트를 열려고 하면 먼저 이 확인 팝업을 띄운다
+  // (팝업 위의 팝업 - 2026-09-17. 예전에는 체크리스트 화면 안에 안내 문구를
+  // 넣었다가 "화면에 안내가 끼어드는 게 별로다"라는 이유로 뺐었다 - 대신
+  // 버튼을 누르는 시점에 한 번만 확인받는 방식으로 바꿨다).
+  const [guestChecklistConfirmOpen, setGuestChecklistConfirmOpen] = useState(false);
   const [checklist, setChecklist] = useState(EMPTY_CHECKLIST);
   const [saving, setSaving] = useState(false);
   // "?" 로 펼치는 점수 기준 설명·수정. draftWeights는 펼칠 때의 현재 기준으로 채운다.
@@ -111,6 +118,7 @@ export default function EditListingDialog({
       // 저장해둔 값이 있으면 그걸로, 없으면 빈 체크리스트로.
       setShowChecklist(false);
       setHelpOpen(false);
+      setGuestChecklistConfirmOpen(false);
       setChecklist(initialChecklist || EMPTY_CHECKLIST);
     }
   }
@@ -155,17 +163,43 @@ export default function EditListingDialog({
           <CloseIcon />
         </button>
         <div className="edit-dialog-header">
-          <div>
-            <div className="edit-dialog-title">{showChecklist ? "체크리스트" : "매물 정보"}</div>
-            <div className="edit-dialog-name">{item ? item.name + " · " + item.sizeLabel : ""}</div>
+          {/* .edit-dialog-header-top: 제목/이름과 체크리스트 버튼을 가로로
+              나란히 놓는 CSS인데, 이 래퍼 div가 없어서 버튼이 제목 아래로
+              떨어져 보였다(2026-09-17 발견). */}
+          <div className="edit-dialog-header-top">
+            <div>
+              <div className="edit-dialog-title">{showChecklist ? "체크리스트" : "매물 정보"}</div>
+              <div className="edit-dialog-name-row">
+              <div className="edit-dialog-name">{item ? item.name + " · " + item.sizeLabel : ""}</div>
+              {item && (
+                <div className="edit-dialog-badges">
+                  {(() => {
+                    const matched = (item.regulations || []).map((key) => REGULATIONS[key]).filter(Boolean);
+                    const badges = matched.length > 0 ? matched : [REGULATIONS.none];
+                    return badges.map((def) => (
+                      <span key={def.label} className={"reg-badge reg-badge--tiny " + def.cls}>
+                        {def.label}
+                      </span>
+                    ));
+                  })()}
+                </div>
+              )}
+            </div>
+            </div>
+            <button
+              type="button"
+              className="edit-dialog-checklist-btn"
+              onClick={() => {
+                if (!showChecklist && guest) {
+                  setGuestChecklistConfirmOpen(true);
+                  return;
+                }
+                setShowChecklist((prev) => !prev);
+              }}
+            >
+              {showChecklist ? "매물 정보" : "임장 체크리스트"}
+            </button>
           </div>
-          <button
-            type="button"
-            className="edit-dialog-checklist-btn"
-            onClick={() => setShowChecklist((prev) => !prev)}
-          >
-            {showChecklist ? "매물 정보" : "임장 체크리스트"}
-          </button>
         </div>
 
         <div className={"edit-dialog-panel" + (showChecklist ? " is-checklist-panel" : "")}>
@@ -345,6 +379,44 @@ export default function EditListingDialog({
             {saving ? "저장 중…" : "저장"}
           </button>
         </div>
+
+        {guestChecklistConfirmOpen && (
+          <div
+            className="checklist-guest-confirm-overlay"
+            role="presentation"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setGuestChecklistConfirmOpen(false);
+            }}
+          >
+            <div className="checklist-guest-confirm" role="alertdialog" aria-modal="true" aria-label="로그인 안내">
+              <p className="checklist-guest-confirm-message">
+                로그인 없이 작성하면 저장되지 않아요. 로그인하면 나중에도 확인할 수 있어요.
+              </p>
+              <div className="checklist-guest-confirm-actions">
+                <button
+                  type="button"
+                  className="edit-dialog-cancel"
+                  onClick={() => {
+                    setGuestChecklistConfirmOpen(false);
+                    setShowChecklist(true);
+                  }}
+                >
+                  취소
+                </button>
+                <button
+                  type="button"
+                  className="edit-dialog-save"
+                  onClick={() => {
+                    setGuestChecklistConfirmOpen(false);
+                    onRequestLogin?.();
+                  }}
+                >
+                  로그인
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

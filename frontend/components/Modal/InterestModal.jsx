@@ -11,7 +11,8 @@ import {
 } from "../icons";
 import { DIRECTIONS, INTERIORS, dealCountLabel, formatEokLabel } from "@/lib/data";
 import useScrollLock from "@/hooks/useScrollLock";
-import { searchComplexes, getComplexSizes } from "@/lib/api";
+import { regulationsFromBackend } from "@/lib/dashboardItems";
+import { searchComplexes, getComplexSizes, getComplexRegulationStatus } from "@/lib/api";
 
 // <InterestModal open onClose onSubmit /> : 오른쪽에서 슬라이드되는 매물 검색/
 // 추가 패널. SearchStep/SizeSelectStep/DetailStep(+DetailAccordion)을 이
@@ -111,6 +112,16 @@ export default function InterestModal({ open, onClose, onSubmit }) {
   // 지금 "유효한" 요청의 complexId를 기록해두고, 응답이 왔을 때 이 값과
   // 다르면(그 사이에 다른 단지를 선택했으면) 무시한다.
   const activeSizesComplexId = useRef(null);
+  // 규제 뱃지 조회가 끝나기 전에 제출 버튼을 누르면(부가 정보라 canSubmit을
+  // 막지는 않는다) complex.regulations가 아직 빈 배열이라, 등록 직후엔
+  // "규제 없음"으로 보였다가 다른 동작을 하고 나서야(리스트 재조회 등) 정정
+  // 되는 문제가 있었다(2026-09-17). 제출 직전에 이 진행 중인 요청을 한 번
+  // 기다려서 고친다 - 재조회는 하지 않고 이미 보낸 요청을 그대로 기다리기만
+  // 하므로, 이미 끝나 있으면(대부분의 경우) 기다림 없이 바로 지나간다.
+  const regulationFetch = useRef(null);
+  // handleFooterClick의 complex 클로저는 await 도중의 state 갱신을 못 보므로
+  // (stale closure), 제출 시점엔 이 ref에서 최신 규제 정보를 읽는다.
+  const latestRegulations = useRef([]);
 
   // 모달이 열릴 때마다(open이 false→true로 바뀔 때) 내부 state를 전부
   // freshState()에 해당하는 초기값으로 되돌린다. useEffect 안에서 setState를
@@ -209,26 +220,35 @@ export default function InterestModal({ open, onClose, onSubmit }) {
 
     // 규제 뱃지는 부가 정보라 실패해도 조용히 무시한다(빈 배열 유지 -
     // InterestCard가 "규제 해당 없음"으로 보여줌) - 평형 조회 실패처럼
-    // 화면을 막는 에러로 취급하지 않는다.
-    try {
-      const status = await getComplexRegulationStatus(c.complexId);
-      if (activeSizesComplexId.current !== c.complexId) return;
-      setComplex((prev) =>
-        prev && prev.complexId === c.complexId
-          ? { ...prev, regulations: regulationsFromBackend(status) }
-          : prev
-      );
-    } catch {
-      // 무시 - 위 주석 참고.
-    }
+    // 화면을 막는 에러로 취급하지 않는다. 다만 handleFooterClick이 제출
+    // 직전에 이 요청을 기다릴 수 있도록 promise 자체는 ref에 보관한다.
+    latestRegulations.current = [];
+    regulationFetch.current = (async () => {
+      try {
+        const status = await getComplexRegulationStatus(c.complexId);
+        if (activeSizesComplexId.current !== c.complexId) return;
+        const regulations = regulationsFromBackend(status);
+        latestRegulations.current = regulations;
+        setComplex((prev) =>
+          prev && prev.complexId === c.complexId
+            ? { ...prev, regulations }
+            : prev
+        );
+      } catch {
+        // 무시 - 위 주석 참고.
+      }
+    })();
   }
 
   const backLinkHidden = screen === "search";
   const canSubmit = complex && size !== null;
 
-  function handleFooterClick() {
+  async function handleFooterClick() {
     if (!canSubmit) return;
     const sizeInfo = complex.sizes[size];
+    // 규제 뱃지 조회가 아직 진행 중이면 여기서 한 번 기다린다(재조회 아님 -
+    // 이미 보낸 요청 그대로) - 대부분 이미 끝나 있어 체감 지연은 없다.
+    if (regulationFetch.current) await regulationFetch.current;
     onSubmit({
       name: complex.name,
       sizeLabel: sizeInfo.label,
@@ -238,7 +258,7 @@ export default function InterestModal({ open, onClose, onSubmit }) {
       ho,
       direction,
       interior,
-      regulations: complex.regulations || [],
+      regulations: latestRegulations.current,
       // 차트(거래량 유동성 등)가 실거래 데이터를 불러올 때 쓰는 백엔드 식별자.
       complexId: complex.complexId,
       sizeId: sizeInfo.sizeId,
