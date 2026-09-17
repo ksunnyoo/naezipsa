@@ -17,7 +17,6 @@ export default function DuplicateUnitDialog({
   open,
   name,
   sizeLabel,
-  unit,
   onSame,
   onDifferent,
   onCancel,
@@ -49,11 +48,7 @@ export default function DuplicateUnitDialog({
         </div>
 
         <div className="edit-dialog-panel">
-          <p className="duplicate-dialog-text">
-            같은 단지·평형 후보가 이미 있어요. 지금 담으면 카드에
-            <b>{` ${unit} `}</b>
-            으로 똑같이 보여서 둘을 구분할 수 없어요.
-          </p>
+          <p className="duplicate-dialog-text">같은 단지·평형 후보가 이미 있어요.</p>
           <p className="duplicate-dialog-hint">
             다른 집이라면 담은 뒤에 동·호수나 층을 넣어 구분할 수 있어요.
           </p>
