@@ -29,4 +29,5 @@ pytest==9.1.1              # tests/ 실행용. 서버 구동에는 필요 없음
 
 # --- 기타 ---
 python-dotenv==1.2.3
+tzdata==2026.4              # ZoneInfo("Asia/Seoul")용 시간대 DB. Windows는 OS에 없어서 필요 (뉴스·청약)
 supabase==2.31.0            # 현재 코드에서 직접 사용하지 않음(ORM으로 직접 접속). 향후 Auth/Storage용으로 유지
