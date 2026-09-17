@@ -306,9 +306,13 @@ export default function NaejipsaApp() {
   const scoringWeights = weightsForContext(shownGroup, profile);
   const visibleItems = scopedItems.map((item) => {
     const saved = itemChecklists[checklistKey(item)];
-    const score = saved ? computeOverallScore(saved.values, scoringWeights)?.score : null;
+    const result = saved ? computeOverallScore(saved.values, scoringWeights) : null;
     // 체크리스트를 쓰지 않은 후보는 점수가 없다(카드에 뱃지도 안 붙는다).
-    return score == null ? item : { ...item, score };
+    // 몇 개를 보고 낸 점수인지도 함께 넘긴다 - 2개만 보고 낸 100점과 18개를 다 본
+    // 72점이 카드에 나란히 놓이면 앞이 더 좋아 보이기 때문이다.
+    return result == null
+      ? item
+      : { ...item, score: result.score, scoreChecked: result.checked, scoreTotal: result.total };
   });
   // 그룹 만들기·기존 그룹에 추가의 "선택"은 카드 체크 상태를 그대로 쓴다(서버에 저장된 후보만).
   const selectedBackendIds = visibleItems

@@ -92,17 +92,21 @@ describe("점수 뱃지 (InterestCard)", () => {
   const noop = () => {};
 
   it("점수가 있으면 뱃지로 보여주고, 없으면 붙이지 않는다", () => {
+    const scored = { ...item, score: 87, scoreChecked: 12, scoreTotal: 18 };
     const { rerender } = render(
-      <InterestCard item={{ ...item, score: 87 }} onToggle={noop} onEdit={noop}
+      <InterestCard item={scored} onToggle={noop} onEdit={noop}
         onRemove={noop} onDragHandleMouseDown={noop} />,
     );
-    expect(screen.getByTitle("임장 체크리스트 점수 (100점 만점)").textContent).toBe("87");
+    const badge = screen.getByTitle(/임장 체크리스트 87점/);
+    expect(badge.textContent).toBe("87");
+    // 몇 개를 보고 낸 점수인지도 알 수 있어야 한다(2개만 본 100점과 구분).
+    expect(badge.getAttribute("title")).toContain("18개 중 12개 확인");
 
     rerender(
       <InterestCard item={item} onToggle={noop} onEdit={noop}
         onRemove={noop} onDragHandleMouseDown={noop} />,
     );
-    expect(screen.queryByTitle("임장 체크리스트 점수 (100점 만점)")).toBeNull();
+    expect(screen.queryByTitle(/임장 체크리스트/)).toBeNull();
   });
 });
 

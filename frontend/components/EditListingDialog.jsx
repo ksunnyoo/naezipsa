@@ -248,6 +248,11 @@ export default function EditListingDialog({
               <div className="field-block checklist-rating">
                 <div className="field-block-label">
                   {auto ? `종합 평점 : ${auto.score}점` : "종합 평점"}
+                  {auto && (
+                    <span className="checklist-rating-coverage">
+                      {`${auto.total}개 중 ${auto.checked}개 확인`}
+                    </span>
+                  )}
                   <button
                     type="button"
                     className="checklist-rating-help-btn"

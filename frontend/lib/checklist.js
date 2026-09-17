@@ -85,6 +85,10 @@ export const EMPTY_CHECKLIST = Object.fromEntries(
   CHECKLIST_GROUPS.flatMap((group) => group.items.map((item) => [item.key, null])),
 );
 
+// 체크리스트 항목 총 개수(18). "18개 중 12개 확인"처럼 몇 개를 보고 낸 점수인지
+// 알려줄 때 쓴다.
+const TOTAL_ITEM_COUNT = Object.keys(EMPTY_CHECKLIST).length;
+
 // --- 서버 기록 <-> 화면 값 변환 -------------------------------------------
 
 // GET/POST 응답(임장 기록) -> 화면이 쓰는 모양.
@@ -234,10 +238,12 @@ function itemScore(key, value) {
 export function computeOverallScore(values, weights) {
   let weightSum = 0;
   let weighted = 0;
+  let checked = 0;
   for (const group of CHECKLIST_GROUPS) {
     const scores = group.items
       .map((item) => itemScore(item.key, values?.[item.key]))
       .filter((score) => score != null);
+    checked += scores.length;
     if (scores.length === 0) continue;
     const average = scores.reduce((sum, score) => sum + score, 0) / scores.length;
     const weight = weights[group.key] ?? 0;
@@ -256,5 +262,10 @@ export function computeOverallScore(values, weights) {
     // 저장은 여전히 1~5 정수다(DB의 ck_inspections_rating, 모바일 임장 API 계약).
     // 화면에서 고르는 값이 아니라 위 점수를 그 자로 옮긴 값이다.
     rating: Math.min(5, Math.max(1, Math.round(score / 20))),
+    // 몇 개를 보고 낸 점수인지. 점수만 보면 후보끼리 비교가 어긋난다 - 2개만 체크한
+    // 100점과 18개를 다 본 72점이 나란히 놓이면 앞이 더 좋아 보이지만 실은 덜 본
+    // 것이다. 계산은 그대로 두고(안 본 항목은 계산에서 빠진다) 사실만 함께 보여준다.
+    checked,
+    total: TOTAL_ITEM_COUNT,
   };
 }
