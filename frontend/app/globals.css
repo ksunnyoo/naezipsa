@@ -1705,10 +1705,6 @@ select:focus-visible {
   width: 0;
   height: 0;
 }
-.interest-drag-spacer {
-  width: 16px;
-  flex-shrink: 0;
-}
 .dashboard-add-slot {
   flex: 1;
   border: 1.5px dashed var(--color-border-strong);
