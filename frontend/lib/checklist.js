@@ -85,6 +85,10 @@ export const EMPTY_CHECKLIST = Object.fromEntries(
   CHECKLIST_GROUPS.flatMap((group) => group.items.map((item) => [item.key, null])),
 );
 
+// 체크리스트 항목 총 개수(18). "18개 중 12개 확인"처럼 몇 개를 보고 낸 점수인지
+// 알려줄 때 쓴다.
+const TOTAL_ITEM_COUNT = Object.keys(EMPTY_CHECKLIST).length;
+
 // --- 서버 기록 <-> 화면 값 변환 -------------------------------------------
 
 // GET/POST 응답(임장 기록) -> 화면이 쓰는 모양.
@@ -175,19 +179,42 @@ export const WEIGHT_CATEGORIES = CHECKLIST_GROUPS.map((group) => ({
 // 프로필 이용 목적에서 고른 기본 가중치를 쓴다. 그래서 같은 후보라도 어느 그룹에서
 // 보느냐에 따라 점수가 달라지는데, 그게 의도다 - 한 그룹 안에서는 모두 같은 자로
 // 재니까 그 안의 비교는 언제나 공정하다.
-export function weightsForContext(group, servicePurposes) {
-  const custom = group?.scoring_weights;
-  if (custom && WEIGHT_CATEGORIES.every(({ key }) => typeof custom[key] === "number")) {
-    return custom;
+// 5개 카테고리가 모두 숫자로 채워진 값만 믿는다. 일부만 있는 값으로 계산하면
+// 빠진 카테고리가 조용히 0이 되어 점수가 엉뚱해진다.
+function isCompleteWeights(weights) {
+  return Boolean(weights) && WEIGHT_CATEGORIES.every(({ key }) => typeof weights[key] === "number");
+}
+
+export function weightsForContext(group, profile) {
+  // 1) 이 그룹만의 기준이 있으면 그것
+  if (isCompleteWeights(group?.scoring_weights)) return group.scoring_weights;
+  // 2) 없으면 내가 정해둔 기본 기준
+  if (isCompleteWeights(profile?.scoring_weights)) return profile.scoring_weights;
+  // 3) 그것도 없으면 이용 목적(전세/매매)에서 고른 기본값
+  return weightsForPurposes(profile?.service_purposes);
+}
+
+// 지금 점수가 어느 기준으로 계산되고 있는지. 화면에서 "○○ 그룹 기준" /
+// "내 기본 기준" / "매매 기준"처럼 알려주고, 고친 값을 어디에 저장할지도 가른다.
+export function scoringSource(group, profile) {
+  if (isCompleteWeights(group?.scoring_weights)) {
+    return { kind: "group", groupId: group.id, label: `${group.name} 그룹 기준` };
   }
-  return weightsForPurposes(servicePurposes);
+  if (isCompleteWeights(profile?.scoring_weights)) {
+    return { kind: "profile", label: "내 기본 기준" };
+  }
+  const purposes = profile?.service_purposes;
+  const preset = !purposes?.length || (purposes.includes("jeonse") && purposes.some(p => p !== "jeonse"))
+    ? "전세·매매 중간"
+    : purposes.includes("jeonse") ? "전세" : "매매";
+  return { kind: "preset", label: `${preset} 기본값` };
 }
 
 // 가중치 편집을 시작할 때 쓸 값. 그룹에 정해둔 게 있으면 그것, 없으면 프로필
 // 기본을 시작점으로 준다. 서버가 0~100 정수만 받으므로 반올림해서 넘긴다
 // (목적을 둘 다 고른 경우의 기본값은 두 벌의 중간이라 소수가 될 수 있다).
-export function editableWeights(group, servicePurposes) {
-  const base = weightsForContext(group, servicePurposes);
+export function editableWeights(group, profile) {
+  const base = weightsForContext(group, profile);
   return Object.fromEntries(
     WEIGHT_CATEGORIES.map(({ key }) => [key, Math.round(base[key] ?? 0)]),
   );
@@ -211,10 +238,12 @@ function itemScore(key, value) {
 export function computeOverallScore(values, weights) {
   let weightSum = 0;
   let weighted = 0;
+  let checked = 0;
   for (const group of CHECKLIST_GROUPS) {
     const scores = group.items
       .map((item) => itemScore(item.key, values?.[item.key]))
       .filter((score) => score != null);
+    checked += scores.length;
     if (scores.length === 0) continue;
     const average = scores.reduce((sum, score) => sum + score, 0) / scores.length;
     const weight = weights[group.key] ?? 0;
@@ -223,11 +252,20 @@ export function computeOverallScore(values, weights) {
   }
   if (weightSum === 0) return null;
   const onThree = weighted / weightSum; // 1~3
-  const onFive = ((onThree - 1) / 2) * 4 + 1; // 1~5
+  // 화면 점수는 항상 100점 만점이다(2026-09-16 결정). 가중치 "합"으로 나눠
+  // 정규화하기 때문에, 사용자가 비중을 어떻게 고쳐도 만점은 100으로 고정된다
+  // (합을 100에 맞출 필요가 없는 이유이기도 하다). 체크한 항목이 있는 묶음만
+  // 계산에 들어가므로, 일부만 체크해도 그 안에서의 100점 만점이 된다.
+  const score = Math.round(((onThree - 1) / 2) * 100); // 0~100
   return {
-    // 정수로만 보여주면 가중치를 바꿔도 반올림에 묻혀 티가 안 난다.
-    score: Math.round(onFive * 10) / 10,
-    // DB는 1~5 정수만 받는다(ck_inspections_rating).
-    rating: Math.min(5, Math.max(1, Math.round(onFive))),
+    score,
+    // 저장은 여전히 1~5 정수다(DB의 ck_inspections_rating, 모바일 임장 API 계약).
+    // 화면에서 고르는 값이 아니라 위 점수를 그 자로 옮긴 값이다.
+    rating: Math.min(5, Math.max(1, Math.round(score / 20))),
+    // 몇 개를 보고 낸 점수인지. 점수만 보면 후보끼리 비교가 어긋난다 - 2개만 체크한
+    // 100점과 18개를 다 본 72점이 나란히 놓이면 앞이 더 좋아 보이지만 실은 덜 본
+    // 것이다. 계산은 그대로 두고(안 본 항목은 계산에서 빠진다) 사실만 함께 보여준다.
+    checked,
+    total: TOTAL_ITEM_COUNT,
   };
 }

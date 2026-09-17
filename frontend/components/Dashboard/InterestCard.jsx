@@ -77,7 +77,10 @@ export default function InterestCard({ item, onToggle, onEdit, onRemove, onDragH
           {item.score != null && (
             <span
               className="interest-card-score"
-              title="임장 체크리스트 점수 (5점 만점)"
+              title={
+                `임장 체크리스트 ${item.score}점 (100점 만점)`
+                + (item.scoreTotal ? ` · ${item.scoreTotal}개 중 ${item.scoreChecked}개 확인` : "")
+              }
             >
               {item.score}
             </span>

@@ -31,9 +31,12 @@ describe("computeOverallScore", () => {
     expect(computeOverallScore(undefined, BUY)).toBeNull();
   });
 
-  it("전부 좋음이면 5점, 전부 나쁨이면 1점", () => {
-    expect(computeOverallScore(allItems(3, 0), BUY)).toEqual({ score: 5, rating: 5 });
-    expect(computeOverallScore(allItems(1, 1), BUY)).toEqual({ score: 1, rating: 1 });
+  it("전부 좋음이면 100점, 전부 나쁨이면 0점", () => {
+    expect(computeOverallScore(allItems(3, 0), BUY))
+      .toEqual({ score: 100, rating: 5, checked: 18, total: 18 });
+    // 화면 점수는 0점이어도 저장은 1~5 정수라 최소 1점으로 옮긴다.
+    expect(computeOverallScore(allItems(1, 1), BUY))
+      .toEqual({ score: 0, rating: 1, checked: 18, total: 18 });
   });
 
   it("유해시설은 없음(0)이 있음(1)보다 좋은 쪽으로 계산된다", () => {
@@ -47,12 +50,35 @@ describe("computeOverallScore", () => {
   it("고르지 않은 항목은 계산에서 빠진다", () => {
     // 교통 묶음만 "좋음"으로 채우면, 나머지를 비워둬도 점수가 깎이지 않는다.
     const onlyTransport = { ...EMPTY_CHECKLIST, transport: 3, commute_road: 3 };
-    expect(computeOverallScore(onlyTransport, BUY)).toEqual({ score: 5, rating: 5 });
+    expect(computeOverallScore(onlyTransport, BUY))
+      .toEqual({ score: 100, rating: 5, checked: 2, total: 18 });
+  });
+
+  it("몇 개를 보고 낸 점수인지 함께 알려준다", () => {
+    // 2개만 보고 낸 100점과 18개를 다 본 100점은 점수가 같다. 그대로 나란히 놓으면
+    // 앞이 더 좋아 보이므로, 계산은 그대로 두고 본 개수를 함께 준다.
+    const few = computeOverallScore({ ...EMPTY_CHECKLIST, transport: 3, commute_road: 3 }, BUY);
+    const all = computeOverallScore(allItems(3, 0), BUY);
+
+    expect(few.score).toBe(all.score);
+    expect(few.checked).toBe(2);
+    expect(all.checked).toBe(18);
+    expect(few.total).toBe(18);
   });
 
   it("한 묶음 안에서는 고른 항목끼리만 평균을 낸다", () => {
     const half = { ...EMPTY_CHECKLIST, transport: 3, commute_road: 1 };
-    expect(computeOverallScore(half, BUY).score).toBe(3); // (3+1)/2 = 2 -> 1~5로 3점
+    expect(computeOverallScore(half, BUY).score).toBe(50); // (3+1)/2 = 2 -> 100점 만점에 50점
+  });
+
+  it("가중치를 어떻게 고쳐도 만점은 100으로 고정된다", () => {
+    // 합이 100이 아닌 가중치(합 250)로도 전부 좋음이면 100점이다.
+    const odd = {
+      transport_group: 50, education_life_group: 50, complex_group: 50,
+      interior_condition_group: 50, facility_group: 50,
+    };
+    expect(computeOverallScore(allItems(3, 0), odd).score).toBe(100);
+    expect(computeOverallScore(allItems(1, 1), odd).score).toBe(0);
   });
 
   it("전세와 매매는 같은 체크에도 다른 점수를 준다", () => {
@@ -67,10 +93,12 @@ describe("computeOverallScore", () => {
     expect(jeonse.score).toBeGreaterThan(buy.score);
   });
 
-  it("화면용 점수는 소수점 한 자리, 저장용 평점은 1~5 정수다", () => {
+  it("화면 점수는 0~100 정수, 저장용 평점은 1~5 정수다", () => {
     const values = { ...EMPTY_CHECKLIST, transport: 3, commute_road: 2 };
     const result = computeOverallScore(values, BUY);
-    expect(result.score).toBe(Math.round(result.score * 10) / 10);
+    expect(Number.isInteger(result.score)).toBe(true);
+    expect(result.score).toBeGreaterThanOrEqual(0);
+    expect(result.score).toBeLessThanOrEqual(100);
     expect(Number.isInteger(result.rating)).toBe(true);
     expect(result.rating).toBeGreaterThanOrEqual(1);
     expect(result.rating).toBeLessThanOrEqual(5);
@@ -139,27 +167,38 @@ describe("어느 가중치로 점수를 낼지 (그룹 > 프로필)", () => {
     interior_condition_group: 20, facility_group: 10,
   };
 
-  it("그룹에 정해둔 가중치가 프로필 기본보다 먼저다", () => {
-    expect(weightsForContext({ scoring_weights: CUSTOM }, ["jeonse"])).toBe(CUSTOM);
+  const MINE = {
+    transport_group: 10, education_life_group: 40, complex_group: 20,
+    interior_condition_group: 20, facility_group: 10,
+  };
+
+  it("그룹 기준 > 내 기본 기준 > 이용 목적 기본값 순이다", () => {
+    const profile = { service_purposes: ["jeonse"], scoring_weights: MINE };
+    // 1) 그룹이 정해뒀으면 그룹이 이긴다
+    expect(weightsForContext({ scoring_weights: CUSTOM }, profile)).toBe(CUSTOM);
+    // 2) 그룹이 없으면 내 기본 기준
+    expect(weightsForContext(null, profile)).toBe(MINE);
+    // 3) 내 기본도 없으면 이용 목적에서 고른 기본값
+    expect(weightsForContext(null, { service_purposes: ["jeonse"] })).toBe(CATEGORY_WEIGHTS.jeonse);
+    expect(weightsForContext({ scoring_weights: null }, { service_purposes: ["buy"] }))
+      .toBe(CATEGORY_WEIGHTS.buy);
   });
 
-  it("그룹을 안 보거나 그룹이 가중치를 안 정했으면 프로필 기본을 쓴다", () => {
-    expect(weightsForContext(null, ["jeonse"])).toBe(CATEGORY_WEIGHTS.jeonse);
-    expect(weightsForContext({ scoring_weights: null }, ["buy"])).toBe(CATEGORY_WEIGHTS.buy);
-  });
-
-  it("카테고리가 빠진 값은 믿지 않고 프로필 기본으로 돌아간다", () => {
-    expect(weightsForContext({ scoring_weights: { transport_group: 30 } }, ["buy"]))
+  it("카테고리가 빠진 값은 믿지 않고 다음 순위로 넘어간다", () => {
+    expect(weightsForContext({ scoring_weights: { transport_group: 30 } }, { service_purposes: ["buy"] }))
+      .toBe(CATEGORY_WEIGHTS.buy);
+    // 내 기본 기준이 깨져 있어도 마찬가지다.
+    expect(weightsForContext(null, { service_purposes: ["buy"], scoring_weights: { complex_group: 50 } }))
       .toBe(CATEGORY_WEIGHTS.buy);
   });
 
   it("편집 시작값은 항상 정수다 - 서버가 0~100 정수만 받는다", () => {
     // 전세·매매를 둘 다 고르면 기본값이 두 벌의 중간이라 소수가 나올 수 있다.
-    const middle = editableWeights(null, ["jeonse", "buy"]);
+    const middle = editableWeights(null, { service_purposes: ["jeonse", "buy"] });
     for (const { key } of WEIGHT_CATEGORIES) {
       expect(Number.isInteger(middle[key])).toBe(true);
     }
-    expect(editableWeights({ scoring_weights: CUSTOM }, [])).toEqual(CUSTOM);
+    expect(editableWeights({ scoring_weights: CUSTOM }, {})).toEqual(CUSTOM);
   });
 
   it("편집 화면의 카테고리는 체크리스트 묶음 5개와 같다", () => {

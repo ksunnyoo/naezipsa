@@ -10,6 +10,7 @@ import {
   ChevronRightIcon,
 } from "../icons";
 import { DIRECTIONS, INTERIORS, dealCountLabel, formatEokLabel } from "@/lib/data";
+import useScrollLock from "@/hooks/useScrollLock";
 import { searchComplexes, getComplexSizes } from "@/lib/api";
 
 // <InterestModal open onClose onSubmit /> : 오른쪽에서 슬라이드되는 매물 검색/
@@ -154,14 +155,9 @@ export default function InterestModal({ open, onClose, onSubmit }) {
     return () => cancelAnimationFrame(raf);
   }, [open]);
 
-  // 모달이 열려있는 동안 배경 스크롤 잠금.
-  useEffect(() => {
-    if (!open) return;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = "";
-    };
-  }, [open]);
+  // 모달이 열려있는 동안 배경 스크롤 잠금. 다른 팝업과 겹칠 수 있어 공용 훅을 쓴다
+  // (예전에는 닫을 때 무조건 ""로 풀어, 위에 열려 있던 온보딩의 잠금까지 풀었다).
+  useScrollLock(open);
 
   // 검색 커밋 시 실 API를 부른다(단지 선택 후 평형 목록도 실 API — 아래
   // handleSelectComplex 참고).

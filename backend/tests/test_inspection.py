@@ -156,6 +156,7 @@ def test_login_required(inspection_env):
     assert client.get(f'{URL}/1/inspection').status_code == 401
     assert client.get(f'{URL}/inspections').status_code == 401
     assert client.post(f'{URL}/1/inspection', json={'overall_rating': 3}).status_code == 401
+    assert client.delete(f'{URL}/1/inspection').status_code == 401
 
 
 def test_list_my_inspections(inspection_env):
@@ -241,3 +242,36 @@ def test_database_constraints(inspection_env, data):
             db.execute(insert(PropertyInspection).values(**{'property_id': 1, 'overall_rating': 4, **data}))
             db.commit()
         db.rollback()
+
+
+def test_delete_inspection(inspection_env):
+    """체크를 모두 비웠을 때 쓰는 삭제.
+
+    원래 기록이 없으면 오류가 아니라 deleted=false다 - 화면은 체크를 비울 때마다
+    지우기를 보내는데, 기록이 없던 후보에서도 오류로 보이면 안 된다.
+    """
+    client, engine = inspection_env
+    assert client.delete(f'{URL}/1/inspection').json() == {'deleted': False}
+
+    client.post(f'{URL}/1/inspection', json={'overall_rating': 4, 'transport': 3})
+    assert client.delete(f'{URL}/1/inspection').json() == {'deleted': True}
+    # 지운 뒤에는 조회도 404고, 목록에서도 빠진다.
+    assert client.get(f'{URL}/1/inspection').status_code == 404
+    assert client.get(f'{URL}/inspections').json() == {'items': [], 'count': 0}
+    with Session(engine) as db:
+        assert db.scalar(select(func.count()).select_from(PropertyInspection)) == 0
+
+
+def test_delete_inspection_keeps_the_candidate(inspection_env):
+    """기록만 지우고 후보는 남긴다."""
+    client, engine = inspection_env
+    client.post(f'{URL}/1/inspection', json={'overall_rating': 4})
+    client.delete(f'{URL}/1/inspection')
+    with Session(engine) as db:
+        assert db.get(DashboardItem, 1) is not None
+
+
+@pytest.mark.parametrize('item_id', [3, 999])
+def test_delete_inspection_rejects_other_or_missing_candidate(inspection_env, item_id):
+    client, _ = inspection_env
+    assert client.delete(f'{URL}/{item_id}/inspection').status_code == 404

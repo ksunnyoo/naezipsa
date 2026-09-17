@@ -31,6 +31,7 @@ import {
   createGroupShareLink,
   revokeGroupShareLinks,
   getSharedGroup,
+  deleteInspection,
   getInspection,
   getInspections,
   saveInspection,
@@ -65,6 +66,19 @@ function nextGroupName(groups) {
 function checklistKey(item) {
   if (!item) return null;
   return item.backendId != null ? `srv-${item.backendId}` : `loc-${item.id}`;
+}
+
+// 주소에서 공유 토큰(?share= / ?groupShare=)을 지운다.
+//
+// 미리보기를 닫은 뒤, 또는 열리지 않는 링크일 때만 부른다. 링크를 열자마자 지우면
+// 새로고침했을 때 불러올 토큰이 없어서, 받은 사람이 링크를 다시 붙여넣기 전까지
+// 그룹의 최신 내용을 볼 수 없다 - 그룹 링크는 열 때마다 지금 후보를 보여주는 게 핵심이다.
+function clearShareTokenFromUrl() {
+  const url = new URL(window.location.href);
+  if (!url.searchParams.has("share") && !url.searchParams.has("groupShare")) return;
+  url.searchParams.delete("share");
+  url.searchParams.delete("groupShare");
+  window.history.replaceState({}, "", url);
 }
 
 // 목록을 주어진 id 순서로 줄 세운다(key: 로컬 id "id" 또는 서버 id "backendId").
@@ -257,13 +271,8 @@ export default function NaejipsaApp() {
         toast.show(groupToken
           ? "존재하지 않거나 공유가 중지된 그룹 링크예요."
           : "존재하지 않거나 만료된 공유 링크예요.");
-      })
-      .finally(() => {
-        // 새로고침해도 다시 뜨지 않도록 쿼리스트링에서 지운다.
-        const url = new URL(window.location.href);
-        url.searchParams.delete("share");
-        url.searchParams.delete("groupShare");
-        window.history.replaceState({}, "", url);
+        // 열리지 않는 링크는 바로 지운다. 남겨두면 새로고침할 때마다 같은 안내가 뜬다.
+        clearShareTokenFromUrl();
       });
 
     return () => {
@@ -294,12 +303,16 @@ export default function NaejipsaApp() {
   // 보고 있으면 그 그룹 기준, 전체 후보 화면이면 프로필 기본(전세/매매)이다.
   // 같은 후보라도 그룹을 옮기면 점수가 달라 보이지만, 한 그룹 안에서는 모두 같은
   // 자로 재기 때문에 그 안의 비교는 언제나 공정하다(2026-09-16 결정).
-  const scoringWeights = weightsForContext(shownGroup, profile?.service_purposes);
+  const scoringWeights = weightsForContext(shownGroup, profile);
   const visibleItems = scopedItems.map((item) => {
     const saved = itemChecklists[checklistKey(item)];
-    const score = saved ? computeOverallScore(saved.values, scoringWeights)?.score : null;
+    const result = saved ? computeOverallScore(saved.values, scoringWeights) : null;
     // 체크리스트를 쓰지 않은 후보는 점수가 없다(카드에 뱃지도 안 붙는다).
-    return score == null ? item : { ...item, score };
+    // 몇 개를 보고 낸 점수인지도 함께 넘긴다 - 2개만 보고 낸 100점과 18개를 다 본
+    // 72점이 카드에 나란히 놓이면 앞이 더 좋아 보이기 때문이다.
+    return result == null
+      ? item
+      : { ...item, score: result.score, scoreChecked: result.checked, scoreTotal: result.total };
   });
   // 그룹 만들기·기존 그룹에 추가의 "선택"은 카드 체크 상태를 그대로 쓴다(서버에 저장된 후보만).
   const selectedBackendIds = visibleItems
@@ -466,6 +479,26 @@ export default function NaejipsaApp() {
       return true;
     } catch (err) {
       toast.show(err.message);
+      return false;
+    }
+  }
+
+  // 체크리스트의 "?"에서 점수 기준을 고쳤을 때. 어디에 저장할지는 지금 보고 있는
+  // 화면이 정한다 - 그룹을 보는 중이면 그 그룹에, 전체 후보 화면이면 내 기본
+  // 기준(프로필)에 저장한다. weights가 null이면 정해둔 기준을 지운다.
+  // 저장하면 profile이나 그룹이 갱신되어 카드·팝업 점수가 바로 다시 계산된다.
+  async function handleSaveWeights(weights) {
+    if (shownGroup) return handleUpdateScoring(shownGroup.id, weights);
+    if (!user) {
+      toast.show("로그인 후 이용할 수 있어요");
+      return false;
+    }
+    try {
+      await saveProfile({ scoring_weights: weights });
+      toast.show(weights ? "점수 기준을 저장했어요" : "점수 기준을 기본값으로 되돌렸어요");
+      return true;
+    } catch {
+      toast.show("점수 기준을 저장하지 못했어요. 잠시 후 다시 시도해주세요.");
       return false;
     }
   }
@@ -672,6 +705,8 @@ export default function NaejipsaApp() {
     setImportModalOpen(false);
     setSharePreviewItems([]);
     setSharePreviewGroupName(null);
+    // 토큰은 여기서(미리보기를 닫은 뒤) 지운다. 이유는 clearShareTokenFromUrl 주석 참고.
+    clearShareTokenFromUrl();
   }
 
   // 체크박스(비교 차트·AI 분석에 포함할지) 토글. 로그인 상태면 서버에도 저장해
@@ -838,6 +873,21 @@ export default function NaejipsaApp() {
           toast.show("체크리스트를 저장하지 못했어요. 잠시 후 다시 시도해주세요.");
           return;
         }
+      } else if (itemChecklists[key]) {
+        // 체크를 모두 비운 경우. 저장을 건너뛰기만 하면 서버에 남은 옛 기록이 그대로라,
+        // 다시 열었을 때 지운 줄 알았던 점수가 되살아난다. 그래서 기록을 지운다.
+        // (임장 메모도 그 기록에 함께 들어 있어 같이 지워진다.)
+        try {
+          await deleteInspection(item.backendId);
+          setItemChecklists((prev) => {
+            const next = { ...prev };
+            delete next[key];
+            return next;
+          });
+        } catch {
+          toast.show("체크리스트를 지우지 못했어요. 잠시 후 다시 시도해주세요.");
+          return;
+        }
       }
     } else if (key) {
       // 게스트는 서버에 저장할 수 없어 이 세션 동안만 값을 들고 있는다.
@@ -949,8 +999,8 @@ export default function NaejipsaApp() {
             onDelete: handleDeleteGroup,
             onStopShare: handleStopGroupShare,
             onUpdateScoring: handleUpdateScoring,
-            // 그룹이 점수 기준을 정하지 않았을 때 편집 시작값으로 쓸 프로필 기본.
-            servicePurposes: profile?.service_purposes,
+            // 그룹이 기준을 정하지 않았을 때 쓸 내 기본 기준(과 이용 목적)을 넘긴다.
+            profile,
           }}
           onShare={handleShare}
         />
@@ -1007,9 +1057,10 @@ export default function NaejipsaApp() {
         open={editingItemId != null}
         item={editingItem}
         initialChecklist={itemChecklists[checklistKey(editingItem)]?.values}
-        initialRating={itemChecklists[checklistKey(editingItem)]?.rating ?? null}
-        servicePurposes={profile?.service_purposes}
+        group={shownGroup}
+        profile={profile}
         onSave={handleEditSave}
+        onSaveWeights={handleSaveWeights}
         onCancel={() => setEditingItemId(null)}
       />
       <ImportShareModal

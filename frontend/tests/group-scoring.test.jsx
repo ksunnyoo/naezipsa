@@ -64,7 +64,7 @@ describe("후보 카드 점수 계산 (NaejipsaApp)", () => {
 
   it("로그인하면 체크리스트를 한 번에 받아 후보마다 점수를 매긴다", async () => {
     getInspections.mockResolvedValue({ count: 1, items: [
-      // 교통 묶음만 채운다: (3+1)/2 = 2 -> 1~5 자로 3점.
+      // 교통 묶음만 채운다: (3+1)/2 = 2 -> 100점 만점에 50점.
       { id: 1, property_id: 11, transport: 3, commute_road: 1, overall_rating: 3, memo: "",
         created_at: "2026-09-16T05:00:00Z", updated_at: "2026-09-16T05:00:00Z" },
     ] });
@@ -73,7 +73,7 @@ describe("후보 카드 점수 계산 (NaejipsaApp)", () => {
 
     // 후보마다 한 번씩 부르지 않고 한 번에 받아온다.
     await waitFor(() => expect(getInspections).toHaveBeenCalledTimes(1));
-    expect(await screen.findByText("단지1 점수 3")).toBeTruthy();
+    expect(await screen.findByText("단지1 점수 50")).toBeTruthy();
     // 체크리스트를 쓰지 않은 후보는 점수가 없다.
     expect(screen.getByText("단지2 점수 없음")).toBeTruthy();
   });
@@ -92,17 +92,21 @@ describe("점수 뱃지 (InterestCard)", () => {
   const noop = () => {};
 
   it("점수가 있으면 뱃지로 보여주고, 없으면 붙이지 않는다", () => {
+    const scored = { ...item, score: 87, scoreChecked: 12, scoreTotal: 18 };
     const { rerender } = render(
-      <InterestCard item={{ ...item, score: 4.2 }} onToggle={noop} onEdit={noop}
+      <InterestCard item={scored} onToggle={noop} onEdit={noop}
         onRemove={noop} onDragHandleMouseDown={noop} />,
     );
-    expect(screen.getByTitle("임장 체크리스트 점수 (5점 만점)").textContent).toBe("4.2");
+    const badge = screen.getByTitle(/임장 체크리스트 87점/);
+    expect(badge.textContent).toBe("87");
+    // 몇 개를 보고 낸 점수인지도 알 수 있어야 한다(2개만 본 100점과 구분).
+    expect(badge.getAttribute("title")).toContain("18개 중 12개 확인");
 
     rerender(
       <InterestCard item={item} onToggle={noop} onEdit={noop}
         onRemove={noop} onDragHandleMouseDown={noop} />,
     );
-    expect(screen.queryByTitle("임장 체크리스트 점수 (5점 만점)")).toBeNull();
+    expect(screen.queryByTitle(/임장 체크리스트/)).toBeNull();
   });
 });
 
@@ -113,7 +117,7 @@ describe("그룹 점수 기준 편집 (GroupBar)", () => {
     const onUpdateScoring = vi.fn().mockResolvedValue(true);
     render(<GroupBar menu={{
       open: true, groups: [GROUP], activeGroup: null, selectedCount: 0,
-      servicePurposes: ["jeonse"], onUpdateScoring,
+      profile: { service_purposes: ["jeonse"] }, onUpdateScoring,
       onSelect: () => {}, onCreate: () => {}, onAddTo: () => {},
       onRename: () => {}, onDelete: () => {}, onStopShare: () => {},
       ...overrides,

@@ -47,6 +47,7 @@ def create_insight(
             profile.id,
             (payload.item_ids if payload else None),
             service_purposes=profile.service_purposes,
+            scoring_weights=profile.scoring_weights,
         )
     except ValueError as e:
         # 후보가 하나도 없는 경우. 사용자가 고칠 수 있는 상황이라 400.

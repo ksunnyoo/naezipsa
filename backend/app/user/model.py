@@ -26,7 +26,7 @@
    깨지고, Alembic autogenerate도 변경을 감지하지 못한다.
    값 검증은 애플리케이션(Pydantic) 쪽에서 한다.
 """
-from sqlalchemy import ARRAY, Column, DateTime, String, Uuid, func
+from sqlalchemy import ARRAY, JSON, Column, DateTime, String, Uuid, func
 
 from app.core.database import Base
 
@@ -68,6 +68,12 @@ class Profile(Base):
     # 별도 테이블로 빼지 않은 이유: 목적만으로 조회하거나 집계할 일이 없고,
     # 프로필과 항상 같이 읽고 같이 쓰기 때문이다.
     service_purposes = Column(ARRAY(String(30)))
+
+    # 내 기본 임장 점수 기준(카테고리 5개 비중). NULL이면 따로 정하지 않은 것이라
+    # 화면이 이용 목적(전세/매매)의 기본값을 쓴다. 그룹이 자기 기준을 정해두면
+    # 그 그룹에서는 이 값 대신 그룹 기준으로 점수를 낸다(2026-09-16 결정).
+    # 배열이 아니라 JSON인 이유: 키-값 5쌍을 통째로 읽고 쓰기만 한다.
+    scoring_weights = Column(JSON, nullable=True)
 
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at = Column(
