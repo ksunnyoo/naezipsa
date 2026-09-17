@@ -12,16 +12,25 @@ naezipsa/
 ├── backend/              FastAPI 백엔드 (여기서 모든 백엔드 명령어 실행)
 │   ├── app/
 │   │   ├── main.py
-│   │   ├── core/         공용: 설정·DB연결·인증·오류형식
-│   │   ├── user/         A · 프로필
-│   │   ├── dashboard/    A · 후보매물, 대시보드 집계
+│   │   ├── core/         공용: 설정·DB연결·인증·오류형식·임장 점수 규칙
+│   │   ├── user/         A · 프로필 (닉네임·나이대·이용 목적·내 점수 기준)
+│   │   ├── dashboard/    A · 후보매물, 대시보드 집계, 스냅샷 공유
+│   │   ├── group/        A · 후보 그룹, 그룹 공유 링크, 그룹별 점수 기준
+│   │   ├── inspection/   A · 임장 체크리스트 기록 (후보당 1건)
+│   │   ├── insight/      A · AI 종합분석
 │   │   ├── property/     B · 실거래 검색/지표
-│   │   └── policy/       정책·뉴스 (작업 예정)
+│   │   ├── news/         정 · 부동산 뉴스
+│   │   └── subscription/ 정 · 청약 정보
 │   ├── ingest/           국토부 데이터 수집 배치 (B)
 │   ├── alembic/          DB 마이그레이션
 │   ├── tests/            pytest
 │   └── info.md           ★ 명령어와 API 명세 전부 여기
-├── frontend/             프론트엔드
+├── frontend/             Next.js(App Router) + React 화면
+│   ├── app/              layout.js · page.js · globals.css
+│   ├── components/       화면 조각 (NaejipsaApp.jsx 가 최상위)
+│   ├── lib/              API 호출·형태 변환·임장 점수 계산
+│   ├── hooks/            프로필 온보딩, 토스트
+│   └── tests/            vitest
 └── README.md
 
 기능 폴더는 안이 같은 모양입니다 — `router.py`(엔드포인트) · `service.py`(로직) ·
@@ -102,6 +111,62 @@ pytest tests/ -q
 
 실제 개발 DB에 붙어서 돌기 때문에 `.env`가 필요하고, Supabase에 계정이
 하나도 없으면 일부가 skip 됩니다. (Supabase → Authentication → Users → Add user)
+
+## 프론트엔드 시작하기
+
+Next.js(App Router) + React입니다. **`frontend/` 폴더 안에서** 실행합니다.
+
+### 1. 패키지 설치
+
+```bash
+cd frontend
+npm install
+```
+
+### 2. `.env.local` 채우기
+
+`.env.example`를 복사해서 `.env.local`을 만들고 값을 채웁니다.
+
+| 값 | 설명 |
+|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase Project URL (REST 경로 `/rest/v1/` 없이 base만) |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Supabase publishable 키 |
+| `NEXT_PUBLIC_API_BASE_URL` | 백엔드 주소. 기본 `http://127.0.0.1:8000/api/v1` |
+
+- **`localhost` 말고 `127.0.0.1`을 쓰세요.** Windows에서 `localhost`는 IPv6(`::1`)부터
+  시도하는데 개발 서버는 127.0.0.1에만 떠 있어, 새 연결마다 약 0.2초씩 늦어집니다.
+- `NEXT_PUBLIC_` 값은 **브라우저에 그대로 노출**됩니다. 백엔드의 `DATABASE_URL`이나
+  secret 키는 절대 여기 넣지 마세요.
+
+### 3. 실행
+
+```bash
+npm run dev
+```
+
+- 화면: http://localhost:3000
+- 로그인·후보 저장이 동작하려면 **백엔드도 같이 떠 있어야** 합니다.
+
+### 4. 테스트 · 검사
+
+```bash
+npm test          # vitest (jsdom). 화면을 그려서 동작을 확인합니다
+npm run lint      # eslint — 오류 0개를 유지합니다(경고는 기존 <img> 건)
+npm run build     # 배포 빌드가 깨지지 않는지 확인
+```
+
+### 프론트에서 알아둘 것
+
+- **상태는 `components/NaejipsaApp.jsx`에 모여 있습니다.** 후보 목록·그룹·체크리스트
+  캐시·로그인 세션이 전부 여기 있고 props로 내려갑니다(3~4단계라 context를 쓰지 않습니다).
+  **프론트를 처음 읽는다면 이 파일부터 여세요.**
+- **로그인은 Supabase가 처리합니다.** 백엔드는 토큰을 검증만 합니다.
+  `lib/api.js`의 `authHeaders()`가 세션 토큰을 `Authorization` 헤더에 실어 보냅니다.
+- **금액은 화면에서 "만원", API에서는 "원"** 입니다. 변환은 `lib/dashboardItems.js`
+  한 곳에서만 합니다.
+- **임장 점수 규칙은 두 곳에 있습니다** — `lib/checklist.js`와
+  `backend/app/core/scoring.py`. 한쪽만 고치면 카드에 보이는 점수와 AI가 말하는 점수가
+  달라집니다. 양쪽 테스트가 같은 예시로 같은 값을 확인하니 함께 고치세요.
 
 ## 코드 읽는 순서
 
@@ -224,11 +289,18 @@ git merge main
 
 ```bash
 pip install -r requirements.txt   # pull 결과에 requirements.txt가 보였을 때만
-pytest tests/ -q                  # 39개 통과하는지 확인 (30초)
+pytest tests/ -q                  # 전부 통과하는지 확인 (30초)
 ```
 
 `pip install`은 매일 할 필요 없습니다. `git pull` 출력에 `requirements.txt`가
 있었을 때만 하면 됩니다. 새 패키지가 추가된 경우니까요.
+
+> **`alembic/versions/`에 새 파일이 보였다면 서버를 반드시 다시 띄우세요.**
+> 공용 DB에는 마이그레이션이 이미 적용돼 있는데, 옛 코드로 떠 있는 서버는 새 컬럼을
+> 모릅니다. 없는 컬럼을 읽어 500이 나거나, 반대로 **새 필드를 조용히 무시해서
+> "저장한 것처럼 보이지만 저장되지 않는"** 증상이 납니다. `--reload`를 켜놨어도
+> 파일 변경을 놓칠 때가 있으니, 화면이 이상하면 코드보다 **서버가 최신인지**를
+> 먼저 의심하세요.
 
 `pytest`는 매일 한 번 돌려두면 좋습니다. **남의 작업이 내 코드를 깼는지** 바로 알 수
 있습니다. 서버를 띄우려면:
@@ -286,9 +358,17 @@ git push origin feature/작업이름
 | A | 프로필 `/api/v1/users/me/profile` | 필요 |
 | A | 후보 매물 `/api/v1/dashboard/items` | 필요 |
 | A | 대시보드 `/api/v1/dashboard` | 필요 |
+| A | 후보 그룹 `/api/v1/groups` | 필요 |
+| A | 그룹 공유 열람 `/api/v1/shared/groups/{token}` | 불필요 |
+| A | 스냅샷 공유 `/api/v1/dashboard/shares` | 만들 때만 필요 |
+| A | 임장 기록 `/api/v1/properties/{id}/inspection` | 필요 |
+| A | 임장 일괄 조회 `/api/v1/properties/inspections` | 필요 |
+| A | AI 종합분석 `/api/v1/dashboard/insight` | 필요 |
 | B | 단지 검색 `/api/v1/search` | 불필요 |
 | B | 평형·지표 `/api/v1/items/{size_id}/...` | 불필요 |
 | B | 거시지표 `/api/v1/macro/indices` | 불필요 |
+| 정 | 부동산 뉴스 `/api/v1/news` | 불필요 |
+| 정 | 청약 정보 `/api/v1/subscription` | 불필요 |
 
 엔드포인트별 요청·응답과 허용값은 **[backend/info.md](backend/info.md)** 에 있습니다.
 
@@ -356,12 +436,15 @@ git push origin feature/작업이름
 
 | 폴더 | 담당 | 내용 |
 |---|---|---|
-| `app/user/` | A | 프로필 조회·수정 |
-| `app/dashboard/` | A | 후보매물 CRUD, 대시보드 집계 |
+| `app/user/` | A | 프로필 조회·수정, 내 임장 점수 기준 |
+| `app/dashboard/` | A | 후보매물 CRUD, 대시보드 집계, 스냅샷 공유 |
+| `app/group/` | A | 후보 그룹, 그룹 공유 링크, 그룹별 점수 기준 |
+| `app/inspection/` | A | 임장 체크리스트 기록 (후보당 1건) |
+| `app/insight/` | A | AI 종합분석 |
 | `app/property/` | B | 단지 검색, 평형·시세 지표, 거시지표 |
 | `ingest/` | B | 국토부 데이터 수집 배치 |
-| `app/policy/` | 정책·뉴스 담당 | (비어 있음) |
-| `app/core/` | 공용 | 설정, DB 연결, 인증, 오류 형식 |
+| `app/news/` `app/subscription/` | 정 | 부동산 뉴스, 청약 정보 |
+| `app/core/` | 공용 | 설정, DB 연결, 인증, 오류 형식, 임장 점수 규칙 |
 | `alembic/` `tests/` | A | 마이그레이션, 테스트 |
 
 **규칙 4가지**
@@ -421,4 +504,5 @@ alembic upgrade head
 ## 더 읽을 것
 
 - **[backend/info.md](backend/info.md)** — 전체 명령어, API 명세, 지표 계산 기준
-- [frontend/README.md](frontend/README.md) — 프론트엔드에서 백엔드 붙이는 법
+- **[frontend/README.md](frontend/README.md)** — 프론트엔드 폴더 구조, 화면 흐름, 상태를 어디서 들고 있는지
+- [docs/development-kickoff-plan.md](docs/development-kickoff-plan.md) — 기능별 구현 기록과 결정 이력, 수동 확인 목록
