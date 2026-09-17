@@ -250,6 +250,20 @@ export async function saveInspection(propertyId, payload) {
   return res.json();
 }
 
+// 임장 기록 지우기. 체크리스트를 모두 비우고 저장할 때 부른다 - 저장을 건너뛰기만
+// 하면 서버에 남은 옛 기록이 그대로라, 다시 열었을 때 지운 줄 알았던 점수가 되살아난다.
+// 원래 기록이 없었으면 { deleted: false }로 200이 온다(오류가 아니다).
+export async function deleteInspection(propertyId) {
+  const res = await fetch(`${API_BASE_URL}/properties/${propertyId}/inspection`, {
+    method: "DELETE",
+    headers: await authHeaders(),
+  });
+  if (!res.ok) {
+    throw new Error(`delete inspection failed with status ${res.status}`);
+  }
+  return res.json();
+}
+
 // 내 후보의 임장 기록을 한 번에 가져온다. 후보 카드에 점수를 띄우려면 목록
 // 단계에서 모든 후보의 항목 점수가 필요한데, 후보마다 getInspection을 부르면
 // 느리기 때문이다. 아직 체크리스트를 쓰지 않은 후보는 목록에 없다.

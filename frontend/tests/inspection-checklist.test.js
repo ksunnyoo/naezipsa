@@ -32,9 +32,11 @@ describe("computeOverallScore", () => {
   });
 
   it("전부 좋음이면 100점, 전부 나쁨이면 0점", () => {
-    expect(computeOverallScore(allItems(3, 0), BUY)).toEqual({ score: 100, rating: 5 });
+    expect(computeOverallScore(allItems(3, 0), BUY))
+      .toEqual({ score: 100, rating: 5, checked: 18, total: 18 });
     // 화면 점수는 0점이어도 저장은 1~5 정수라 최소 1점으로 옮긴다.
-    expect(computeOverallScore(allItems(1, 1), BUY)).toEqual({ score: 0, rating: 1 });
+    expect(computeOverallScore(allItems(1, 1), BUY))
+      .toEqual({ score: 0, rating: 1, checked: 18, total: 18 });
   });
 
   it("유해시설은 없음(0)이 있음(1)보다 좋은 쪽으로 계산된다", () => {
@@ -48,7 +50,20 @@ describe("computeOverallScore", () => {
   it("고르지 않은 항목은 계산에서 빠진다", () => {
     // 교통 묶음만 "좋음"으로 채우면, 나머지를 비워둬도 점수가 깎이지 않는다.
     const onlyTransport = { ...EMPTY_CHECKLIST, transport: 3, commute_road: 3 };
-    expect(computeOverallScore(onlyTransport, BUY)).toEqual({ score: 100, rating: 5 });
+    expect(computeOverallScore(onlyTransport, BUY))
+      .toEqual({ score: 100, rating: 5, checked: 2, total: 18 });
+  });
+
+  it("몇 개를 보고 낸 점수인지 함께 알려준다", () => {
+    // 2개만 보고 낸 100점과 18개를 다 본 100점은 점수가 같다. 그대로 나란히 놓으면
+    // 앞이 더 좋아 보이므로, 계산은 그대로 두고 본 개수를 함께 준다.
+    const few = computeOverallScore({ ...EMPTY_CHECKLIST, transport: 3, commute_road: 3 }, BUY);
+    const all = computeOverallScore(allItems(3, 0), BUY);
+
+    expect(few.score).toBe(all.score);
+    expect(few.checked).toBe(2);
+    expect(all.checked).toBe(18);
+    expect(few.total).toBe(18);
   });
 
   it("한 묶음 안에서는 고른 항목끼리만 평균을 낸다", () => {

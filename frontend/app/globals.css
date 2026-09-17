@@ -4602,3 +4602,12 @@ select:focus-visible {
   opacity: 1;
   cursor: default;
 }
+
+/* 종합 평점 옆 "18개 중 12개 확인". 점수만 보면 후보끼리 비교가 어긋나므로
+   몇 개를 보고 낸 점수인지 함께 알려준다. 점수보다 눈에 덜 띄게 둔다. */
+.checklist-rating-coverage {
+  margin-left: 8px;
+  font-size: 12px;
+  font-weight: 400;
+  color: #6b7280;
+}
