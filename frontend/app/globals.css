@@ -4611,3 +4611,15 @@ select:focus-visible {
   font-weight: 400;
   color: #6b7280;
 }
+
+/* 비로그인 사용자에게 "체크리스트가 저장되지 않는다"고 알리는 줄. 18개를 다 채운
+   뒤에 알면 늦으므로 체크리스트 맨 위에 둔다. */
+.checklist-guest-note {
+  margin: 0 0 12px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  background: var(--sub-bg, #f3f4f6);
+  font-size: 13px;
+  line-height: 1.5;
+  color: #4b5563;
+}

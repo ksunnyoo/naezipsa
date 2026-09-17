@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { CloseIcon } from "../icons";
+import useScrollLock from "@/hooks/useScrollLock";
 
 const PURPOSES = [["move", "이사"], ["buy", "매매"], ["jeonse", "전세"], ["invest", "투자"]];
 const AGES = [["20s", "20대"], ["30s", "30대"], ["40s", "40대"], ["50s", "50대"], ["60s+", "60대 이상"]];
@@ -16,13 +17,13 @@ export default function ProfileOnboardingModal({ profile, onSave, mode = "onboar
   const modalRef = useRef(null);
   const busy = useRef(false);
 
+  // 배경 스크롤 잠금은 공용 훅이 맡는다(팝업이 겹쳐도 어긋나지 않게).
+  useScrollLock();
+
   useEffect(() => {
     const previousFocus = document.activeElement;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
     modalRef.current?.focus();
     return () => {
-      document.body.style.overflow = previousOverflow;
       if (previousFocus?.isConnected) previousFocus.focus();
     };
   }, []);
