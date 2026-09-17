@@ -58,7 +58,7 @@ function CustomTooltip({ active, payload, label, itemsById }) {
         borderRadius: 10,
         boxShadow: "0 4px 18px rgba(17, 24, 39, 0.08)",
         padding: "8px 10px",
-        fontSize: 12,
+        fontSize: "0.75rem",
         color: "#374151",
       }}
     >
@@ -224,7 +224,7 @@ export default function PriceTrendChart({ items }) {
     <ChartPlaceholder
       title="실거래가 추이"
       className="price-trend-chart"
-      infoText={"체크한 매물들의 매매·전세 실거래가가\n달마다 어떻게 움직였는지 선으로 비교해요."}
+      infoText={"선택한 단지의 매매·전세 실거래가가 월별로 어떻게 움직였는지 비교해요."}
       headerRight={
         <div className="price-trend-chart__header-right">
           <label className="price-trend-chart__period-picker">
@@ -298,7 +298,7 @@ export default function PriceTrendChart({ items }) {
             <ResponsiveContainer width="100%" height="100%">
               <LineChart
                 data={chartData}
-                margin={{ top: 12, right: 8, left: 0, bottom: 10 }}
+                margin={{ top: 12, right: 8, left: 0, bottom: 0 }}
               >
                 <CartesianGrid
                   strokeDasharray="3 3"
@@ -309,8 +309,8 @@ export default function PriceTrendChart({ items }) {
                   dataKey="label"
                   tickLine={false}
                   axisLine={false}
-                  tickMargin={10}
-                  tick={{ fontSize: 11, fill: "#6b7280", fontWeight: 500 }}
+                  tickMargin={8}
+                  tick={{ fontSize: "0.6875rem", fill: "#6b7280", fontWeight: 500 }}
                 />
                 <YAxis
                   width={36}
@@ -319,7 +319,7 @@ export default function PriceTrendChart({ items }) {
                   tickLine={false}
                   axisLine={false}
                   tickMargin={2}
-                  tick={{ fontSize: 11, fill: "#6b7280", fontWeight: 500 }}
+                  tick={{ fontSize: "0.6875rem", fill: "#6b7280", fontWeight: 500 }}
                   tickFormatter={(value) => `${Math.round(value / 100000000)}억`}
                 />
                 <Tooltip content={<CustomTooltip itemsById={itemsById} />} />

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { DocumentIcon, PencilIcon, PlusIcon, ShareIcon, XIcon } from "../icons";
-import { WEIGHT_CATEGORIES, editableWeights } from "@/lib/checklist";
+import { WEIGHT_CATEGORIES, editableWeights, weightShares } from "@/lib/checklist";
 
 // 가중치 합. 전부 0이면 점수를 낼 수 없어 저장 버튼을 잠근다(서버도 422로 막는다).
 function scoringTotal(weights) {
@@ -30,6 +30,8 @@ export default function GroupBar({ menu }) {
   const [scoringId, setScoringId] = useState(null);
   const [weights, setWeights] = useState({});
   const [savingWeights, setSavingWeights] = useState(false);
+  // 적은 숫자가 실제로 몇 %를 차지하는지. 숫자만 보면 옆 칸에 따라 뜻이 달라진다.
+  const scoringShares = weightShares(weights);
   const inputRef = useRef(null);
   // 이번 이름 편집이 이미 저장·취소됐으면 뒤따르는 blur에서 다시 저장하지 않는다.
   const editDoneRef = useRef(false);
@@ -208,25 +210,30 @@ export default function GroupBar({ menu }) {
                 {scoringId === group.id && (
                   <div className="group-scoring">
                     <p className="group-scoring-hint">
-                      이 그룹의 후보만 아래 비중으로 점수를 매겨요. 합이 100일 필요는
-                      없어요 — 비율만 씁니다.
+                      이 그룹의 후보는 아래 비중으로 점수를 매겨요.
                     </p>
                     {WEIGHT_CATEGORIES.map(({ key, label }) => (
                       <label key={key} className="group-scoring-row">
                         <span>{label}</span>
-                        <input
-                          type="number"
-                          min={0}
-                          max={100}
-                          value={weights[key] ?? 0}
-                          disabled={savingWeights}
-                          onChange={(e) =>
-                            setWeights((prev) => ({
-                              ...prev,
-                              [key]: Math.max(0, Math.min(100, Number(e.target.value) || 0)),
-                            }))
-                          }
-                        />
+                        <span className="group-scoring-value">
+                          {/* 적은 숫자가 곧 퍼센트가 아니다(합으로 나눈 몫이 실제 비중).
+                              그래서 실제로 몇 %인지 옆에 같이 보여준다. */}
+                          <span className="group-scoring-share">{`${scoringShares[key]}%`}</span>
+                          <input
+                            type="number"
+                            min={0}
+                            max={100}
+                            value={weights[key] ?? 0}
+                            aria-label={label}
+                            disabled={savingWeights}
+                            onChange={(e) =>
+                              setWeights((prev) => ({
+                                ...prev,
+                                [key]: Math.max(0, Math.min(100, Number(e.target.value) || 0)),
+                              }))
+                            }
+                          />
+                        </span>
                       </label>
                     ))}
                     <div className="group-scoring-actions">

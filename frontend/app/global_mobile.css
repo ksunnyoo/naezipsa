@@ -1,0 +1,233 @@
+/* global_mobile.css
+ * 뷰포트 반응형(반응형 브레이크포인트) 미디어쿼리를 한 파일에 모아둔 곳.
+ * 뷰포트 크기와 무관하므로 이 파일 대상이 아니고 globals.css에 그대로 둔다.
+ * app/layout.js에서 globals.css 바로 다음에 import한다.
+ */
+
+@media (max-width: 700px) {
+  .insights-layout {
+    display: block;
+  }
+  .insights-sidebar {
+    display: none;
+  }
+  .insights-content {
+    padding: 22px 16px 56px;
+  }
+  .insights-ai-placeholder {
+    min-height: 170px;
+  }
+  .dashboard-card-header {
+    padding: 24px 22px 16px;
+  }
+}
+
+/* 모바일(767px 이하)에서만 쓰는 관심 매물 리스트 오프캔버스 드로어 관련
+ * 버튼/스크림은 기본적으로 숨겨둔다. 768px 이상(노트북/태블릿)에서는
+ * 위 900px 블록의 가로 스크롤 리플로우를 그대로 쓰고 이 버튼들은 노출되지
+ * 않는다.
+ */
+.dashboard-list-open-tab,
+.dashboard-list-close-btn,
+.dashboard-list-scrim {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  /* 관심 매물 리스트(.dashboard-list)를 화면 밖 왼쪽으로 숨기고, 필요할 때
+   * 꺼내 쓰는 오프캔버스 드로어로 전환한다(2026-09 피드백). position은
+   * absolute 대신 fixed를 사용했다 - .dashboard(position: absolute)와
+   * .workspace(overflow: hidden) 둘 다 transform 등으로 새 containing
+   * block을 만들지 않으므로, fixed를 쓰면 뷰포트 기준으로 항상 화면에
+   * 고정되어 부모의 overflow:hidden에 잘리거나 스크롤에 밀려나지 않는다.
+   */
+  html,
+  body {
+    font-size: 90%;
+  }
+
+  #app {
+    min-width: unset;
+  }
+
+  .header {
+    padding: 0 16px;
+  }
+
+  .logo-mark {
+    width: 24px;
+    height: 24px;
+  }
+
+  .logo-word {
+    font-size: 1rem;
+  }
+
+  .header-content-tabs {
+    position: static;
+    top: auto;
+    left: auto;
+    transform: none;
+    margin-left: 10px;
+    gap: 6px;
+    margin-top: 2px;
+  }
+  .header-actions {
+    margin-left: auto;
+  }
+  .header-content-tab {
+    font-size: 0.8rem;
+  }
+
+  .nav-icon-btn {
+    width: 28px;
+    height: 28px;
+  }
+
+  .nav-logout-btn {
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+  }
+
+  .workspace {
+    height: calc(100vh - 58px);
+  }
+
+  .size-list {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .dashboard {
+    --dashboard-h-pad: 0;
+  }
+  .dashboard-charts {
+    padding: 12px;
+    gap: 12px;
+    display: block;
+    border-radius: 0;
+  }
+  .chart-left-col,
+  .chart-side-col,
+  .chart-sub-row {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
+  }
+  .chart-side-col {
+    margin-top: 12px;
+  }
+  .chart-placeholder,
+  .chart-placeholder.chart-main,
+  .chart-left-col .chart-placeholder,
+  .chart-side-col .chart-placeholder,
+  .chart-side-col .chart-placeholder:first-child,
+  .chart-side-col .chart-placeholder:last-child,
+  .chart-sub-row .chart-placeholder {
+    width: 100%;
+    flex: none;
+    /* 각 차트 내부는 .trade-volume-liquidity-chart__wrap 같은 래퍼가
+       height: 100%로 .chart-placeholder 높이를 그대로 이어받아 그 안의
+       ResponsiveContainer(Recharts)까지 퍼센티지로 내려간다. desktop에서는
+       이 카드의 높이를 flex-grow(flex: 1 / 0.8 / 1.4 등)가 만들어줬는데,
+       위에서 flex: none으로 지우면서 델리 높이가 없어져(그냥 콘텐츠 높이로
+       주저앉음) height: 100% 체인이 끊겨 차트가 안 보이는 문제가 있었다.
+       그래서 min-height 대신 명시적인 height를 다시 줘서 그 체인을
+       살린다. */
+    height: 320px;
+  }
+  .chart-placeholder.chart-main {
+    height: 400px;
+  }
+
+  /* z-index: 모달 오버레이(.modal-overlay 40, .edit-overlay 50)보다는 항상
+     낮게 잡아서, 드로어가 열려있는 상태에서 모달이 뜨면(예: "+ 매물
+     추가하기") 드로어가 사라지는 애니메이션 도중에도 모달이 항상 위에
+     보이도록 한다(2026-09 피드백 - "화면이 겹치네"). */
+  .dashboard-list {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    z-index: 35;
+    width: min(240px, 82vw);
+    max-height: none;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    background: var(--color-panel);
+    box-shadow: 6px 0 24px rgba(17, 17, 17, 0.18);
+    padding: 56px 10px 16px;
+    transform: translateX(-100%);
+    transition: transform 0.24s ease;
+  }
+
+  .dashboard-list.is-mobile-open {
+    transform: translateX(0);
+  }
+
+  .dashboard-list > * {
+    width: auto;
+  }
+
+  .dashboard-list-open-tab {
+    display: flex;
+    position: fixed;
+    top: 50%;
+    left: 0;
+    z-index: 30;
+    transform: translateY(-50%);
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 56px;
+    border: 1px solid var(--color-border-subtle);
+    border-left: none;
+    border-radius: 0 var(--radius-lg) var(--radius-lg) 0;
+    background: var(--color-panel);
+    box-shadow: 2px 0 8px rgba(17, 17, 17, 0.12);
+    color: var(--color-text-secondary);
+    cursor: pointer;
+  }
+
+  .dashboard-list-close-btn {
+    display: flex;
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: var(--radius-full);
+    background: var(--color-surface-subtle);
+    color: var(--color-text-secondary);
+    cursor: pointer;
+  }
+
+  .dashboard-list-scrim {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 34;
+    background: rgba(17, 17, 17, 0.32);
+  }
+
+  .dashboard-list-scrim.is-open {
+    display: block;
+  }
+
+  .insight-cards-row {
+    display: block;
+  }
+
+  .insight-panel-inner > .insight-cards-row {
+    flex: 1 0 auto;
+  }
+  .insight-card {
+    max-height: 360px;
+  }
+  .insight-card + .insight-card {
+    margin-top: 16px;
+  }
+}

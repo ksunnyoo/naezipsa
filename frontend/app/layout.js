@@ -1,4 +1,5 @@
 import "./globals.css";
+import "./global_mobile.css";
 
 // Pretendard도 next/font/google 대신 CDN CSS를 <link>로 직접 불러온다.
 // 이유는 기존 Noto Sans KR 때와 동일: next/font는 빌드 타임에 폰트 파일을
@@ -20,6 +21,11 @@ export default function RootLayout({ children }) {
         <link
           rel="stylesheet"
           href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css"
+        />
+        {/* 로고 워드마크("내집사") 전용 - Jua는 400(Regular) 한 굵기만 있다. */}
+        <link
+          rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Jua&display=swap"
         />
         {children}
       </body>

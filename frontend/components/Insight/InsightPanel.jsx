@@ -9,6 +9,9 @@ import useToast from "@/hooks/useToast";
 import { createDashboardInsight } from "@/lib/api";
 
 const MIN_HEIGHT = 100;
+// 패널을 처음 열었을 때(및 더블클릭 리셋 시) 보여줄 기본 높이. 너무 작으면
+// 초기 화면에서 AI 분석 영역이 빈 상자처럼 보인다는 피드백(2026-09)으로 올림.
+const DEFAULT_HEIGHT = 360;
 // 이전엔 MAX_HEIGHT를 310px 고정값으로 뒀는데(2026-09 피드백 - 화면이 작을
 // 때 리사이즈 가능 영역이 화면 절반을 넘어가 버려 부모 패널 밖으로 넘치는
 // 문제) 화면 높이의 비율로 동적으로 계산하도록 변경. 처음엔 50%로 했다가
@@ -33,7 +36,7 @@ const RESERVED_BELOW_AI = 290; // 카드 줄 최소 260px + 리사이즈 손잡�
 // insight를 idle로 되돌린다(EditListingDialog의 prevOpen과 동일한 이유로
 // useEffect+setState 대신 이 패턴을 쓴다: react-hooks/set-state-in-effect 회피).
 export default function InsightPanel({ items = [], userId, profile, refreshKey, referenceSizeId }) {
-  const [height, setHeight] = useState(240);
+  const [height, setHeight] = useState(DEFAULT_HEIGHT);
   const [isDragging, setIsDragging] = useState(false);
   // 서버 렌더 시점엔 window/DOM이 없어 310(기존 고정값과 동일한 기본치)로
   // 시작하고, 마운트 후 실제 패널 높이 기준으로 갱신 + 창 크기 변경 시
@@ -285,7 +288,7 @@ export default function InsightPanel({ items = [], userId, profile, refreshKey, 
             drag.current = null;
             setIsDragging(false);
           }}
-          onDoubleClick={() => setHeight(240)}
+          onDoubleClick={() => setHeight(DEFAULT_HEIGHT)}
           onKeyDown={(event) => {
             const values = {
               ArrowUp: height - 20,

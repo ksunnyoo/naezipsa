@@ -9,7 +9,7 @@
 프로필 테이블(app/user/model.py)과 같은 Base를 공유한다.
 Alembic이 관리하는 테이블은 전부 app/core/database.py의 Base를 상속해야 한다.
 """
-from sqlalchemy import BigInteger, Boolean, CheckConstraint, Column, DateTime, Index, Integer, String, Uuid, func
+from sqlalchemy import BigInteger, Boolean, CheckConstraint, Column, DateTime, Index, Integer, String, Uuid, func, text
 from sqlalchemy.dialects.postgresql import JSONB
 
 from app.core.database import Base
@@ -60,6 +60,17 @@ class DashboardItem(Base):
         # 내 후보를 저장한 순서대로 읽는다(순번이 같으면 id순).
         Index("ix_dashboard_items_user_sort", "user_id", "sort_order", "id"),
         CheckConstraint("sort_order >= 0", name="ck_dashboard_items_sort_order"),
+        # 같은 평형에 같은 동·호수를 두 번 담지 않는다 - 단, 둘 다 적었을 때만.
+        # 동·호수는 등록 시점에 모르는 경우가 많아 필수로 받지 않는다(2026-09-17 결정).
+        # 안 적은 후보는 몇 개든 담을 수 있고, 적은 후보끼리만 중복이 막힌다.
+        # 평형이 곧 한 동·호수를 가리키므로 complex_id 없이 size_id로 충분하다.
+        Index(
+            "uq_dashboard_items_owner_unit",
+            "user_id", "size_id", "dong", "ho",
+            unique=True,
+            postgresql_where=text("dong IS NOT NULL AND ho IS NOT NULL"),
+            sqlite_where=text("dong IS NOT NULL AND ho IS NOT NULL"),
+        ),
     )
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)

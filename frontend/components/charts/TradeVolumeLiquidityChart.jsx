@@ -151,7 +151,7 @@ export default function TradeVolumeLiquidityChart({ items }) {
     <ChartPlaceholder
       title="거래량 유동성"
       className="trade-volume-liquidity-chart"
-      infoText={"체크한 매물의 매매·전세 거래 건수를 기간별로 보여줘요.\n건수가 많을수록 거래가 활발하다는 뜻이에요."}
+      infoText={"매매·전세 거래량을 보여줘요.\n거래가 꾸준할수록 실제로 사고팔거나 세입자를 구하기 수월한 편이에요."}
       headerRight={
         <div className="trade-volume-liquidity-chart__header-right">
           <div className="trade-volume-liquidity-chart__legend">

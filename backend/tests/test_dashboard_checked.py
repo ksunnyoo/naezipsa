@@ -163,3 +163,47 @@ def test_checked_migration_fills_existing_rows_with_true(tmp_path):
     with engine.connect() as conn:
         assert bool(conn.exec_driver_sql("SELECT checked FROM dashboard_items WHERE id = 1").scalar()) is True
     engine.dispose()
+
+
+# --- 같은 평형에 같은 동·호수는 한 번만 (2026-09-17) -------------------------
+#
+# 동·호수를 필수로 받지 않는 대신, **둘 다 적었을 때만** 중복을 막는다
+# (uq_dashboard_items_owner_unit 부분 유니크 인덱스). 픽스처의 1번 후보가 이미
+# 101동 1203호라 그걸 상대로 확인한다.
+
+
+def test_blank_unit_can_repeat(env):
+    """동·호수를 안 적으면 같은 평형을 여러 개 담을 수 있다 - 강제가 생기지 않는다."""
+    for _ in range(2):
+        assert env.client.post(ITEMS, json={"size_id": 200}).status_code == 201
+
+
+def test_one_side_blank_is_not_a_duplicate(env):
+    """한쪽만 적은 것은 중복 검사 대상이 아니다(인덱스가 둘 다 있을 때만 걸린다)."""
+    assert env.client.post(ITEMS, json={"size_id": 200, "dong": "105"}).status_code == 201
+    assert env.client.post(ITEMS, json={"size_id": 200, "dong": "105"}).status_code == 201
+
+
+def test_same_dong_ho_is_rejected_with_409(env):
+    """이미 담은 동·호수를 또 담으면 500이 아니라 409로 알려준다."""
+    response = env.client.post(ITEMS, json={"size_id": 200, "dong": "101", "ho": "1203"})
+    assert response.status_code == 409
+    assert "동·호수" in response.json()["error"]["message"]
+
+
+def test_editing_to_an_existing_unit_is_rejected(env):
+    """"위치 미입력"이던 후보를 이미 있는 동·호수로 고치면 막힌다.
+
+    새 확인 창이 동·호수 입력을 유도하므로 이 경로로 부딪히는 일이 실제로 생긴다.
+    """
+    new_id = env.client.post(ITEMS, json={"size_id": 200}).json()["id"]
+    response = env.client.patch(f"{ITEMS}/{new_id}/details", json={"dong": "101", "ho": "1203"})
+    assert response.status_code == 409
+    # 막혔어도 후보 자체는 그대로 남는다(롤백).
+    assert env.client.get(f"{ITEMS}").status_code == 200
+
+
+def test_other_user_can_hold_the_same_unit(env):
+    """다른 사람이 같은 집을 담는 것은 막지 않는다 - 키에 user_id가 들어간다."""
+    env.current.id = OTHER
+    assert env.client.post(ITEMS, json={"size_id": 200, "dong": "101", "ho": "1203"}).status_code == 201

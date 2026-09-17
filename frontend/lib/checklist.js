@@ -213,6 +213,22 @@ export function scoringSource(group, profile) {
 // 가중치 편집을 시작할 때 쓸 값. 그룹에 정해둔 게 있으면 그것, 없으면 프로필
 // 기본을 시작점으로 준다. 서버가 0~100 정수만 받으므로 반올림해서 넘긴다
 // (목적을 둘 다 고른 경우의 기본값은 두 벌의 중간이라 소수가 될 수 있다).
+// 각 카테고리가 실제로 차지하는 비중(%).
+//
+// 입력한 숫자는 그 자체로 퍼센트가 아니다 - 전체 합으로 나눈 몫이 실제 비중이라,
+// 같은 "30"도 옆 칸 값에 따라 30%일 수도 6%일 수도 있다. 그 사실을 문장으로
+// 설명하는 대신("합이 100일 필요는 없어요") 실제 몫을 숫자로 보여준다.
+export function weightShares(weights) {
+  const value = (key) => Math.max(0, Number(weights?.[key]) || 0);
+  const total = WEIGHT_CATEGORIES.reduce((sum, { key }) => sum + value(key), 0);
+  return Object.fromEntries(
+    WEIGHT_CATEGORIES.map(({ key }) => [
+      key,
+      total > 0 ? Math.round((value(key) / total) * 100) : 0,
+    ]),
+  );
+}
+
 export function editableWeights(group, profile) {
   const base = weightsForContext(group, profile);
   return Object.fromEntries(
@@ -224,8 +240,15 @@ export function editableWeights(group, profile) {
 // 평균에 넣으면 값이 망가지므로 1~3 자로 옮긴다(없음=3, 있음=1).
 function itemScore(key, value) {
   if (value == null) return null;
-  if (key === "harmful_facility") return value === 0 ? 3 : 1;
-  return value;
+  const score = Number(value);
+  // 숫자가 아닌 값이 흘러들면(예: 문자열 "3") 아래 평균에서 문자열 붙이기가 되어
+  // 점수가 통째로 망가진다. 미확인과 똑같이 계산에서 뺀다.
+  if (!Number.isFinite(score)) return null;
+  // 유해시설만 0=없음(좋음)이라 방향이 반대다.
+  if (key === "harmful_facility") return score === 0 ? 3 : 1;
+  // 1~3 밖의 값이 들어오면 평균이 범위를 벗어나 점수가 100을 넘을 수 있다.
+  // 지금은 화면·서버가 막아주지만, 계산 자체가 안전하도록 범위 안으로 붙든다.
+  return Math.min(3, Math.max(1, score));
 }
 
 // 체크한 항목으로 종합 평점을 계산한다.

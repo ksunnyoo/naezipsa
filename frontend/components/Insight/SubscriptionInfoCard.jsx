@@ -92,12 +92,18 @@ export default function SubscriptionInfoCard({ refreshKey = "", referenceSizeId 
       // 다시 불러오는 동안 이전 그룹을 지우지 않는다 - 지우면 분류 목록이 잠깐
       // 비어서, 마감제외를 켜고 끄는 사이에 분류 선택 팝업이 빈 채로 보인다.
       setState(previous => ({ ...previous, loading: true, error: "" }));
-      if (!referenceSizeId) {
-        setState({ groups: [], loading: false, error: "기준 매물의 지역 정보를 확인할 수 없습니다.", retryable: false });
-        return;
-      }
+      // referenceSizeId(등록된 첫 매물의 평형)가 없어도 청약정보는 그대로
+      // 보여준다 - 관심 매물을 하나도 등록하지 않은 사용자/게스트도 청약
+      // 정보는 볼 수 있어야 한다(2026-09-17). 이 경우 지역 우선순위 없이
+      // 전체 지역 기준으로 온다(백엔드 /subscription/nearby의 size_id는
+      // 이제 선택값).
+      const params = new URLSearchParams({
+        limit_per_region: "30",
+        exclude_closed: String(excludeClosed),
+      });
+      if (referenceSizeId) params.set("size_id", referenceSizeId);
       try {
-        const groups = await getInsightItems(`/subscription/nearby?size_id=${encodeURIComponent(referenceSizeId)}&limit_per_region=30&exclude_closed=${excludeClosed}`, controller.signal);
+        const groups = await getInsightItems(`/subscription/nearby?${params.toString()}`, controller.signal);
         if (!controller.signal.aborted) setState({ groups, loading: false, error: "" });
       } catch (error) {
         if (!controller.signal.aborted) setState({ groups: [], loading: false, error: error.message, retryable: error.retryable !== false });

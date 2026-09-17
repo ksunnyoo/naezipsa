@@ -861,8 +861,9 @@ export default function NaejipsaApp() {
           item.backendId,
           toDetailsPayload(data),
         );
-      } catch {
-        toast.show("변경사항을 저장하지 못했어요. 잠시 후 다시 시도해주세요.");
+      } catch (err) {
+        // 동·호수가 겹치면 서버가 무엇이 문제인지 알려준다 - 일반 문구로 덮지 않는다.
+        toast.show(err.message || "변경사항을 저장하지 못했어요. 잠시 후 다시 시도해주세요.");
         return;
       }
       // 종합 평점이 없으면 아직 아무 항목도 체크하지 않은 것이라 보낼 게 없다.
@@ -951,8 +952,8 @@ export default function NaejipsaApp() {
         // 서버도 새 후보를 내 목록 맨 뒤에 둔다.
         serverOrderRef.current = [...serverOrderRef.current, created.id];
         setDashboardUserId(user.id);
-      } catch {
-        toast.show("관심 매물을 저장하지 못했어요. 잠시 후 다시 시도해주세요.");
+      } catch (err) {
+        toast.show(err.message || "관심 매물을 저장하지 못했어요. 잠시 후 다시 시도해주세요.");
         return null;
       }
     }
@@ -1101,11 +1102,13 @@ export default function NaejipsaApp() {
         open={editingItemId != null}
         item={editingItem}
         initialChecklist={itemChecklists[checklistKey(editingItem)]?.values}
+        guest={!user}
         group={shownGroup}
         profile={profile}
         onSave={handleEditSave}
         onSaveWeights={handleSaveWeights}
         onCancel={() => setEditingItemId(null)}
+        onRequestLogin={() => setAuthModalOpen(true)}
       />
       <ImportShareModal
         open={importModalOpen}

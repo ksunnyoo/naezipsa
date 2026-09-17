@@ -24,8 +24,11 @@ def test_profile_is_created_on_first_call(client, auth, test_user):
     assert body["user_id"] == test_user["id"]
     # 응답 키는 명세("변수명 통일" 표) 그대로여야 한다.
     assert set(body) == {
-        "user_id", "nickname", "age_group", "service_purposes", "created_at", "updated_at",
+        "user_id", "nickname", "age_group", "service_purposes", "scoring_weights",
+        "created_at", "updated_at",
     }
+    # 임장 점수 기준도 처음에는 정하지 않은 상태다(이용 목적 기반 기본값을 쓴다).
+    assert body["scoring_weights"] is None
 
 
 def test_profile_fields_are_all_optional(client, auth):

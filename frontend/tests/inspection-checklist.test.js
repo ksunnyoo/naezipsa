@@ -10,6 +10,7 @@ import {
   editableWeights,
   fromInspectionRecord,
   toInspectionPayload,
+  weightShares,
   weightsForContext,
   weightsForPurposes,
 } from "@/lib/checklist";
@@ -205,5 +206,44 @@ describe("어느 가중치로 점수를 낼지 (그룹 > 프로필)", () => {
     expect(new Set(WEIGHT_CATEGORIES.map((c) => c.key)))
       .toEqual(new Set(Object.keys(CATEGORY_WEIGHTS.buy)));
     expect(WEIGHT_CATEGORIES.every((c) => c.label)).toBe(true);
+  });
+});
+
+describe("이상한 값이 들어와도 점수가 무너지지 않는다", () => {
+  // 화면(1~3 선택지)과 서버(정수 1~3 검증)가 막아주지만, 계산 함수 자체도 안전해야 한다.
+  it("범위 밖 숫자는 1~3 안으로 붙든다", () => {
+    expect(computeOverallScore({ ...EMPTY_CHECKLIST, transport: 9 }, BUY).score).toBe(100);
+    expect(computeOverallScore({ ...EMPTY_CHECKLIST, transport: -5 }, BUY).score).toBe(0);
+  });
+
+  it("숫자 문자열은 숫자로 보고 계산한다", () => {
+    // 예전에는 sum + "3"이 문자열 붙이기가 되어 점수가 통째로 망가졌다.
+    expect(computeOverallScore({ ...EMPTY_CHECKLIST, transport: "3" }, BUY).score).toBe(100);
+  });
+
+  it("숫자가 아닌 값은 미확인과 똑같이 계산에서 뺀다", () => {
+    expect(computeOverallScore({ ...EMPTY_CHECKLIST, transport: "좋음" }, BUY)).toBeNull();
+  });
+});
+
+describe("weightShares", () => {
+  it("적은 숫자가 아니라 전체에서 차지하는 몫을 알려준다", () => {
+    const shares = weightShares({
+      transport_group: 30, education_life_group: 10,
+      complex_group: 0, interior_condition_group: 0, facility_group: 0,
+    });
+    expect(shares.transport_group).toBe(75);
+    expect(shares.education_life_group).toBe(25);
+  });
+
+  it("합이 100이 아니어도 실제 몫으로 환산한다", () => {
+    // 다섯 칸에 100씩 적으면 합은 500이지만 각자는 20%다 - 숫자만 보면 알 수 없는 부분.
+    const all100 = Object.fromEntries(WEIGHT_CATEGORIES.map(({ key }) => [key, 100]));
+    expect(weightShares(all100).transport_group).toBe(20);
+  });
+
+  it("전부 0이면 모두 0%다", () => {
+    const zero = Object.fromEntries(WEIGHT_CATEGORIES.map(({ key }) => [key, 0]));
+    expect(Object.values(weightShares(zero)).every((share) => share === 0)).toBe(true);
   });
 });
