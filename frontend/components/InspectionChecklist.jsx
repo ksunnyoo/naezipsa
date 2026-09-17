@@ -15,9 +15,13 @@ import { CHECKLIST_GROUPS } from "@/lib/checklist";
 // 그룹(교통/교육·생활/단지/내부 상태/설비)은 제목을 눌러 아코디언처럼
 // 접고 펼 수 있다 - collapsedGroups는 이 컴포넌트 안에서만 쓰는 화면
 // 상태라 EditListingDialog에 끌어올리지 않았고, 다이얼로그가 새로
-// 열릴 때마다 다시 마운트되므로 항상 전부 펼쳐진 상태로 시작한다.
+// 열릴 때마다 다시 마운트된다. 항목이 많아 전부 펼쳐진 채로 시작하면
+// 스크롤이 길어진다는 피드백(2026-09)으로, 처음엔 전부 접힌 상태로
+// 시작하고 제목을 눌러야 펼쳐지게 바꿨다.
 export default function InspectionChecklist({ values, onChange }) {
-  const [collapsedGroups, setCollapsedGroups] = useState({});
+  const [collapsedGroups, setCollapsedGroups] = useState(() =>
+    Object.fromEntries(CHECKLIST_GROUPS.map((group) => [group.key, true])),
+  );
 
   function toggleGroup(key) {
     setCollapsedGroups((prev) => ({ ...prev, [key]: !prev[key] }));
