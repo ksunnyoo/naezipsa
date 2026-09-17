@@ -203,7 +203,11 @@ export async function updateDashboardItemDetails(itemId, payload) {
     },
   );
   if (!res.ok) {
-    throw new Error(`update dashboard item failed with status ${res.status}`);
+    // 동·호수 중복(409)처럼 서버가 이유를 알려주는 경우가 있어 그 문구를 살린다.
+    throw await candidateWriteError(
+      res,
+      "변경사항을 저장하지 못했어요. 잠시 후 다시 시도해주세요.",
+    );
   }
   return res.json();
 }

@@ -25,6 +25,7 @@ import secrets
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_profile
@@ -38,6 +39,54 @@ from app.dashboard.service import (
     snapshot_current_items,
 )
 from app.user.model import Profile
+
+# 같은 평형에 같은 동·호수를 두 번 담으려 할 때. DB의 부분 유니크 인덱스
+# (uq_dashboard_items_owner_unit)가 막는데, 그대로 두면 500으로 나가 원인을 알 수 없다.
+_DUPLICATE_UNIT_MESSAGE = (
+    "같은 평형에 같은 동·호수 후보가 이미 있습니다. "
+    "이미 담은 집이면 그 후보를 수정하고, 다른 집이면 동·호수를 확인해 주세요."
+)
+
+
+def _unit_taken(db: Session, user_id, size_id: int, dong, ho, *, exclude_id=None) -> bool:
+    """같은 평형에 같은 동·호수 후보가 이미 있는지.
+
+    둘 중 하나라도 비어 있으면 검사하지 않는다 - 동·호수를 안 적은 후보는 몇 개든
+    담을 수 있어야 한다(DB의 부분 유니크 인덱스와 같은 규칙).
+    """
+    if not dong or not ho:
+        return False
+    query = select(DashboardItem.id).where(
+        DashboardItem.user_id == user_id,
+        DashboardItem.size_id == size_id,
+        DashboardItem.dong == dong,
+        DashboardItem.ho == ho,
+    )
+    if exclude_id is not None:
+        query = query.where(DashboardItem.id != exclude_id)
+    return db.scalar(query.limit(1)) is not None
+
+
+def _commit_unit(db: Session) -> None:
+    """저장한다. 동·호수 중복이면 409로 알린다(다른 IntegrityError는 그대로 올린다).
+
+    평소에는 위 `_unit_taken`이 먼저 걸러낸다. 여기는 두 탭에서 동시에 담는 경우를
+    받아내는 자리다. DB마다 오류 문구가 달라서(PostgreSQL은 인덱스 이름을 주고,
+    SQLite는 컬럼 목록만 준다) 이름 하나로 판정하지 않는다.
+    """
+    try:
+        db.commit()
+    except IntegrityError as error:
+        db.rollback()
+        message = str(error.orig)
+        is_unit_conflict = "uq_dashboard_items_owner_unit" in message or (
+            "dong" in message and "ho" in message
+        )
+        if not is_unit_conflict:
+            raise
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=_DUPLICATE_UNIT_MESSAGE
+        )
 from app.dashboard.schema import (
 
     DashboardItemCreateRequest,
@@ -168,6 +217,12 @@ def create_item(
             detail=f"존재하지 않는 평형입니다. (size_id={payload.size_id})",
         )
 
+    # 동·호수를 둘 다 적었는데 같은 집이 이미 있으면 막는다. 안 적었으면 검사하지 않는다.
+    if _unit_taken(db, profile.id, payload.size_id, payload.dong, payload.ho):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=_DUPLICATE_UNIT_MESSAGE
+        )
+
     if count >= MAX_DASHBOARD_ITEMS:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -184,7 +239,7 @@ def create_item(
     # status는 받지 않고 DB 기본값(considering)에 맡긴다.
     item = DashboardItem(user_id=profile.id, sort_order=next_order, **payload.model_dump())
     db.add(item)
-    db.commit()
+    _commit_unit(db)
     db.refresh(item)
     return item
 
@@ -271,10 +326,24 @@ def update_item_details(
     """
     item = _get_owned_item(db, profile.id, item_id)
 
-    for field, value in payload.model_dump(exclude_unset=True).items():
+    changes = payload.model_dump(exclude_unset=True)
+
+    # 둘 다 "위치 미입력"이던 후보를 각각 같은 동·호수로 고치면 여기서 부딪힌다.
+    # 바꾸기 **전에** 확인한다 - 값을 먼저 넣으면 조회할 때 자동 flush가 일어나
+    # 내 검사보다 DB 오류가 먼저 터진다.
+    if _unit_taken(
+        db, profile.id, item.size_id,
+        changes.get("dong", item.dong), changes.get("ho", item.ho),
+        exclude_id=item.id,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=_DUPLICATE_UNIT_MESSAGE
+        )
+
+    for field, value in changes.items():
         setattr(item, field, value)
 
-    db.commit()
+    _commit_unit(db)
     db.refresh(item)
     return item
 
