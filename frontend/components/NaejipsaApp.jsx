@@ -10,6 +10,7 @@ import ProfileOnboardingModal from "./Modal/ProfileOnboardingModal";
 import useProfileOnboarding from "@/hooks/useProfileOnboarding";
 import ImportShareModal from "./Modal/ImportShareModal";
 import DuplicateUnitDialog from "./Modal/DuplicateUnitDialog";
+import GroupAddDialog from "./Modal/GroupAddDialog";
 import Toast from "./Toast";
 import useToast from "@/hooks/useToast";
 import { MAX_DASHBOARD_GROUPS, MAX_DASHBOARD_ITEMS, unitText } from "@/lib/data";
@@ -82,6 +83,30 @@ function clearShareTokenFromUrl() {
   window.history.replaceState({}, "", url);
 }
 
+// 보고 있는 그룹을 주소에 남긴다(?group=12).
+//
+// 전에는 보고 있는 그룹이 화면 state에만 있어서 새로고침하면 전체 후보로 풀렸다.
+// 주소에 남기면 새로고침해도 유지되고, 들어갈 때 기록을 쌓으므로(pushState)
+// 브라우저 뒤로가기로 전체 후보에 돌아올 수 있다(2026-09-17 결정).
+// 공유 토큰(?share=/?groupShare=)과 같은 자리를 쓰므로 이 키만 손댄다.
+function readGroupIdFromUrl() {
+  const raw = new URL(window.location.href).searchParams.get("group");
+  const id = Number(raw);
+  return raw && Number.isInteger(id) && id > 0 ? id : null;
+}
+
+// 이미 같은 값이면 아무것도 하지 않는다 - 뒤로가기로 주소가 먼저 바뀐 경우에
+// 우리가 그 위에 기록을 또 쌓아서 뒤로가기가 안 먹는 것을 막는다.
+function writeGroupIdToUrl(groupId, { replace = false } = {}) {
+  const url = new URL(window.location.href);
+  const next = groupId == null ? null : String(groupId);
+  if ((url.searchParams.get("group") ?? null) === next) return;
+  if (next == null) url.searchParams.delete("group");
+  else url.searchParams.set("group", next);
+  if (replace) window.history.replaceState({}, "", url);
+  else window.history.pushState({}, "", url);
+}
+
 // 목록을 주어진 id 순서로 줄 세운다(key: 로컬 id "id" 또는 서버 id "backendId").
 // 후보 내용(체크·메모 등)은 건드리지 않고, 순서에 없는 후보는 원래 순서대로 뒤에 둔다.
 function orderItemsBy(items, ids, key) {
@@ -147,6 +172,10 @@ export default function NaejipsaApp() {
   const [activeGroup, setActiveGroup] = useState(null);
   // 그룹 요청이 끝나기 전에 Enter/클릭이 반복돼 같은 요청이 두 번 가는 것을 막는다.
   const groupBusyRef = useRef(false);
+  // 그룹 화면의 "이 그룹에 넣기" 창.
+  const [groupAddOpen, setGroupAddOpen] = useState(false);
+  // 주소에 있던 그룹을 복원하기 전에는 주소를 건드리지 않는다(복원 전에 지워버리면 안 된다).
+  const groupRestoredRef = useRef(false);
 
   // 공유 - URL의 ?share=<token>(매물 스냅샷)이나 ?groupShare=<token>(그룹 링크)을 열었을 때 보여줄
   // 미리보기 상태. sharePreviewGroupName은 그룹 링크일 때만 그룹 이름이 들어간다.
@@ -294,7 +323,8 @@ export default function NaejipsaApp() {
     onboardingOpen ||
     profileEditorOpen ||
     importModalOpen ||
-    duplicatePrompt != null;
+    duplicatePrompt != null ||
+    groupAddOpen;
 
   // 그룹을 보고 있으면 그 그룹에 든 후보만 보여준다(순서는 전체 후보에서 정한 순서).
   // 후보 자체는 dashboardItems에 그대로 있다.
@@ -304,6 +334,12 @@ export default function NaejipsaApp() {
         (it) => it.backendId != null && shownGroup.itemIds.includes(it.backendId),
       )
     : dashboardItems;
+  // "이 그룹에 넣기"에서 고를 수 있는 후보 - 이미 담아뒀지만 이 그룹에는 없는 것.
+  const groupAddCandidates = shownGroup
+    ? dashboardItems.filter(
+        (it) => it.backendId != null && !shownGroup.itemIds.includes(it.backendId),
+      )
+    : [];
   // 카드에 띄울 임장 점수. 지금 보고 있는 화면 기준으로 가중치를 고른다 - 그룹을
   // 보고 있으면 그 그룹 기준, 전체 후보 화면이면 프로필 기본(전세/매매)이다.
   // 같은 후보라도 그룹을 옮기면 점수가 달라 보이지만, 한 그룹 안에서는 모두 같은
@@ -324,6 +360,48 @@ export default function NaejipsaApp() {
     .filter((it) => it.checked && it.backendId != null)
     .map((it) => it.backendId);
 
+  // 새로고침 복원 - 후보 목록을 받은 뒤에 한 번만 한다.
+  // 그룹은 후보의 서버 id로 이뤄져 있어서, 목록보다 먼저 복원하면 걸러낼 대상이 없다.
+  useEffect(() => {
+    if (!user || dashboardUserId !== user.id || groupRestoredRef.current) return;
+    groupRestoredRef.current = true;
+    const id = readGroupIdFromUrl();
+    if (id == null) return;
+    getGroup(id)
+      .then(showGroup)
+      // 지워졌거나 남의 그룹이면 조용히 전체 후보로 두고 주소만 정리한다.
+      .catch(() => writeGroupIdToUrl(null, { replace: true }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- showGroup은 렌더마다 새로 만들어지는 함수라 넣으면 복원이 반복된다. 복원은 목록을 처음 받았을 때 한 번뿐이다(groupRestoredRef).
+  }, [user, dashboardUserId]);
+
+  // 보고 있는 그룹이 바뀌면 주소에 남긴다. 복원이 끝나기 전에는 건드리지 않는다.
+  useEffect(() => {
+    if (!groupRestoredRef.current) return;
+    writeGroupIdToUrl(shownGroup?.id ?? null);
+  }, [shownGroup?.id]);
+
+  // 브라우저 뒤로/앞으로 - 주소가 먼저 바뀌므로 화면을 그쪽에 맞춘다.
+  useEffect(() => {
+    if (!user) return;
+    function syncFromUrl() {
+      const id = readGroupIdFromUrl();
+      if (id === (shownGroup?.id ?? null)) return;
+      if (id == null) {
+        setActiveGroup(null);
+        return;
+      }
+      getGroup(id)
+        .then(showGroup)
+        .catch(() => {
+          setActiveGroup(null);
+          writeGroupIdToUrl(null, { replace: true });
+        });
+    }
+    window.addEventListener("popstate", syncFromUrl);
+    return () => window.removeEventListener("popstate", syncFromUrl);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- showGroup은 렌더마다 새로 만들어져, 넣으면 매 렌더 리스너를 떼었다 다시 단다. 이 효과가 알아야 할 변화는 로그인 계정과 보고 있는 그룹뿐이다.
+  }, [user, shownGroup?.id]);
+
   // Escape로 닫기 — edit-overlay가 열려 있으면 그쪽을 먼저 닫고, 아니면
   // modal-overlay를 닫는 순서(프로토타입과 동일). ImportShareModal도 같은
   // edit-overlay 뼈대를 쓰므로 같은 순서에 낀다. 그룹 메뉴도 Esc로 닫는다.
@@ -342,12 +420,19 @@ export default function NaejipsaApp() {
         handleImportCancel();
         return;
       }
+      if (groupAddOpen) {
+        setGroupAddOpen(false);
+        return;
+      }
       if (modalOpen) setModalOpen(false);
       if (authModalOpen) setAuthModalOpen(false);
+      // 아무 창도 열려 있지 않을 때만 - 그룹 보기에서 나간다(칩의 ✕와 같은 동작).
+      if (!modalOpen && !authModalOpen && shownGroup) setActiveGroup(null);
     }
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [editingItemId, modalOpen, authModalOpen, groupBarOpen, importModalOpen]);
+  }, [editingItemId, modalOpen, authModalOpen, groupBarOpen, importModalOpen,
+      groupAddOpen, shownGroup]);
 
   // 매물을 등록할 때마다 호출 — 대시보드 최초 노출 여부(dashboardRevealed)와
   // 무관하게 히어로는 매번 걷힌다. 로고로 히어로를 다시 연 상태에서 매물을
@@ -506,6 +591,34 @@ export default function NaejipsaApp() {
       toast.show("점수 기준을 저장하지 못했어요. 잠시 후 다시 시도해주세요.");
       return false;
     }
+  }
+
+  // 그룹 칩의 ✕ (와 Esc) - 목록을 전체 후보로 되돌릴 뿐, 그룹도 후보도 건드리지 않는다.
+  function handleExitGroup() {
+    setActiveGroup(null);
+  }
+
+  // 그룹 화면 맨 아래 "이 그룹에 넣기".
+  // 후보 상한(6개)은 전체 기준이라, 6개를 다 채웠어도 그룹에 넣는 건 언제나 된다.
+  async function handleAddPickedToGroup(itemIds) {
+    if (!shownGroup || itemIds.length === 0) return;
+    if (groupBusyRef.current) return;
+    groupBusyRef.current = true;
+    try {
+      applyGroup(await addGroupItems(shownGroup.id, itemIds));
+      toast.show(`"${shownGroup.name}" 그룹에 ${itemIds.length}개를 넣었어요`);
+      setGroupAddOpen(false);
+    } catch (err) {
+      toast.show(err.message);
+    } finally {
+      groupBusyRef.current = false;
+    }
+  }
+
+  // 넣을 창에서 "새 매물 등록하기". 여기서 등록한 후보는 보고 있는 그룹에도 함께 들어간다.
+  function handleCreateFromGroupAdd() {
+    setGroupAddOpen(false);
+    setModalOpen(true);
   }
 
   // 그룹 메뉴의 "추가" - 체크한 후보를 그 그룹에 넣는다. 이미 들어 있는 후보는 빼고
@@ -1061,6 +1174,9 @@ export default function NaejipsaApp() {
           onReorder={handleReorder}
           dragDisabled={orderSaving}
           onAdd={() => setModalOpen(true)}
+          group={shownGroup}
+          onAddToGroup={() => setGroupAddOpen(true)}
+          onExitGroup={handleExitGroup}
           heroCleared={heroCleared}
           showHeroCloseBtn={dashboardRevealed}
           onHeroClose={closeHeroAgain}
@@ -1116,6 +1232,15 @@ export default function NaejipsaApp() {
         groupName={sharePreviewGroupName}
         onImport={handleImportShare}
         onCancel={handleImportCancel}
+      />
+      <GroupAddDialog
+        open={groupAddOpen}
+        groupName={shownGroup?.name ?? ""}
+        candidates={groupAddCandidates}
+        canCreateNew={dashboardItems.length < MAX_DASHBOARD_ITEMS}
+        onAdd={handleAddPickedToGroup}
+        onCreateNew={handleCreateFromGroupAdd}
+        onCancel={() => setGroupAddOpen(false)}
       />
       <DuplicateUnitDialog
         open={duplicatePrompt != null}

@@ -10,6 +10,7 @@ import InsightPanel from "../Insight/InsightPanel";
 export default function Dashboard({
   items,
   totalCount,
+  group,
   insightItems,
   userId,
   profile,
@@ -18,6 +19,8 @@ export default function Dashboard({
   onRemove,
   onReorder,
   onAdd,
+  onAddToGroup,
+  onExitGroup,
   activeContentTab,
   dragDisabled,
 }) {
@@ -26,11 +29,14 @@ export default function Dashboard({
       <DashboardList
         items={items}
         totalCount={totalCount}
+        group={group}
         onToggle={onToggle}
         onEdit={onEdit}
         onRemove={onRemove}
         onReorder={onReorder}
         onAdd={onAdd}
+        onAddToGroup={onAddToGroup}
+        onExitGroup={onExitGroup}
         dragDisabled={dragDisabled}
       />
       <div className="content-track-viewport">
