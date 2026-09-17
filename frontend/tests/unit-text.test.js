@@ -27,8 +27,8 @@ describe("unitText", () => {
   });
 
   it("아무것도 없으면 미입력이라고 알려준다", () => {
-    expect(unitText({})).toBe("위치 미입력");
-    expect(unitText({ dong: "", ho: "", floor: "" })).toBe("위치 미입력");
+    expect(unitText({})).toBe("동 호수 미입력");
+    expect(unitText({ dong: "", ho: "", floor: "" })).toBe("동 호수 미입력");
   });
 
   it("숫자로 들어와도 처리한다(서버 응답은 층이 숫자다)", () => {

@@ -51,7 +51,7 @@ beforeEach(() => {
   auth.session = null;
   getMyProfile.mockResolvedValue({ service_purposes: ["buy"] });
   getInspections.mockResolvedValue({ count: 0, items: [] });
-  // 이미 담아둔 후보 하나: 같은 평형, 구분 정보 없음 -> 카드에 "위치 미입력"
+  // 이미 담아둔 후보 하나: 같은 평형, 구분 정보 없음 -> 카드에 "동 호수 미입력"
   getDashboardItems.mockResolvedValue({ items: [
     { id: 11, size_id: 200, complex_name: "래미안", representative_area: 84.95, checked: true },
   ] });

@@ -99,7 +99,7 @@ export function formatEokLabel(won) {
 // 아는 일이 흔하고, 동·호수는 임장을 다녀와야 안다. 그래서 강제로 받지 않고,
 // 호수가 없으면 층이라도 보여준다("12층"만으로도 같은 라인의 다른 집과 구분된다).
 //
-//   101동 1203호  /  101동 12층  /  1203호  /  12층  /  위치 미입력
+//   101동 1203호  /  101동 12층  /  1203호  /  12층  /  동 호수 미입력
 export function unitText(item) {
   const dong = String(item.dong ?? "").trim();
   const ho = String(item.ho ?? "").trim();
@@ -111,5 +111,5 @@ export function unitText(item) {
   // 호수는 층을 품고 있다(1203호 = 12층 03호). 호수를 모를 때만 층이 정보를 더한다.
   if (!ho && floor) parts.push(`${floor}층`);
 
-  return parts.length > 0 ? parts.join(" ") : "위치 미입력";
+  return parts.length > 0 ? parts.join(" ") : "동 호수 미입력";
 }
