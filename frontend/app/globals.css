@@ -2767,7 +2767,7 @@ select:focus-visible {
 }
 .interest-card-name {
   margin-top: 6px;
-  font-size: clamp(0.85rem, 1.9vh, 1rem);
+  font-size: clamp(0.85rem, 1.9vh, 0.95rem);
   font-weight: 700;
   line-height: 1.25;
   width: 100%;
