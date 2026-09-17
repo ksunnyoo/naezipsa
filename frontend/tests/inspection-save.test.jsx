@@ -41,9 +41,18 @@ function record(overrides = {}) {
   };
 }
 
+// 체크리스트 묶음은 처음엔 전부 접혀 있고(2026-09-17), 접힌 묶음은 아예 그려지지 않는다.
+// 아래 테스트들은 항목을 직접 만지므로 먼저 전부 펼친다.
+function expandAllGroups() {
+  for (const header of screen.getAllByRole("button", { expanded: false })) {
+    fireEvent.click(header);
+  }
+}
+
 async function openChecklist(buttonName) {
   fireEvent.click(await screen.findByRole("button", { name: buttonName }));
   fireEvent.click(await screen.findByRole("button", { name: "임장 체크리스트" }));
+  expandAllGroups();
 }
 
 beforeEach(() => {
@@ -72,6 +81,7 @@ describe("종합 평점 (EditListingDialog)", () => {
   it("항목을 고르면 종합 평점이 100점 만점으로 계산돼 보인다", async () => {
     renderDialog();
     fireEvent.click(screen.getByRole("button", { name: "임장 체크리스트" }));
+    expandAllGroups();
     expect(screen.getByText("항목을 체크하면 종합 평점이 계산돼요.")).toBeTruthy();
 
     // 첫 항목(대중교통 편리)을 "좋음"으로. 고르지 않은 묶음은 계산에서 빠지므로 100점.
@@ -82,6 +92,7 @@ describe("종합 평점 (EditListingDialog)", () => {
   it("저장하면 체크리스트와 평점을 함께 올려보낸다", async () => {
     const onSave = renderDialog();
     fireEvent.click(screen.getByRole("button", { name: "임장 체크리스트" }));
+    expandAllGroups();
     fireEvent.click(screen.getAllByLabelText("좋음")[0]);
     fireEvent.click(screen.getByRole("button", { name: "저장" }));
 
@@ -96,6 +107,7 @@ describe("종합 평점 (EditListingDialog)", () => {
   it("저장해둔 값으로 화면을 채우고 점수를 다시 계산한다", () => {
     renderDialog({ initialChecklist: { transport: 1 } });
     fireEvent.click(screen.getByRole("button", { name: "임장 체크리스트" }));
+    expandAllGroups();
     expect(screen.getAllByLabelText("나쁨")[0].checked).toBe(true);
     // 저장된 평점을 그대로 쓰지 않고 항목으로 다시 계산한다("나쁨"만 있으면 0점).
     expect(screen.getByText("종합 평점 : 0점")).toBeTruthy();
