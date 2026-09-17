@@ -2394,29 +2394,38 @@ select:focus-visible {
   fill: var(--color-primary);
   stroke: #fff;
   stroke-width: 1.5;
-  /* 일반 실거래 점(회색)들 사이에서 눈에 잘 안 띈다는 피드백(2026-09) -
-     천천히 두 번 옅어졌다 돌아오고, 한참 그대로 있다가 다시 반복한다
-     (계속 깜빡이면 정신없어 보여서 "쉬는 구간"을 훨씬 길게 뒀다). */
-  animation: trade-distribution-ask-dot-blink 5s ease-in-out infinite;
-  transform-origin: center;
 }
-@keyframes trade-distribution-ask-dot-blink {
-  0%,
-  60%,
+.trade-distribution-chart__ask-dot-halo {
+  pointer-events: none;
+}
+/* 일반 실거래 점(회색)들 사이에서 눈에 잘 안 띈다는 피드백(2026-09) -
+   깜빡이는 대신 옅은 초록 배경 위로 파장이 계속 퍼져나가는 느낌을 준다.
+   물결 2개를 절반 주기씩 어긋나게 돌려서 끊기지 않고 이어지는 것처럼
+   보이게 한다. */
+.trade-distribution-chart__ask-dot-ripple {
+  fill: none;
+  stroke: var(--color-primary);
+  stroke-width: 1.5;
+  pointer-events: none;
+  animation: trade-distribution-ask-dot-ripple 2.6s ease-out infinite;
+}
+.trade-distribution-chart__ask-dot-ripple--delayed {
+  animation-delay: 1.3s;
+}
+@keyframes trade-distribution-ask-dot-ripple {
+  0% {
+    r: 4.125px;
+    stroke-opacity: 0.55;
+  }
   100% {
-    opacity: 1;
-  }
-  15%,
-  45% {
-    opacity: 0.35;
-  }
-  30% {
-    opacity: 1;
+    r: 15px;
+    stroke-opacity: 0;
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .trade-distribution-chart__ask-dot {
+  .trade-distribution-chart__ask-dot-ripple {
     animation: none;
+    opacity: 0;
   }
 }
 .trade-distribution-chart__item-label {
@@ -2650,7 +2659,7 @@ select:focus-visible {
   gap: 3px;
   flex: 1 1 0;
   min-height: 100px;
-  max-height: 132px;
+  max-height: 110px;
   /* 매물이 새로 추가되면(= 이 row가 새 DOM 노드로 처음 마운트되면) 아래에서
      위로 살짝 올라오면서 자리를 잡는다. key가 바뀌지 않는 기존 row는
      리렌더돼도 같은 DOM 노드를 재사용하니 재생되지 않고, "+ 매물 추가하기"
@@ -2758,7 +2767,7 @@ select:focus-visible {
 }
 .interest-card-name {
   margin-top: 6px;
-  font-size: clamp(0.8rem, 1.9vh, 0.9rem);
+  font-size: clamp(0.85rem, 1.9vh, 0.95rem);
   font-weight: 700;
   line-height: 1.25;
   width: 100%;

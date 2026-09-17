@@ -56,9 +56,11 @@ export default function AreaRankingChart({ items }) {
   const cacheRef = useRef({});
 
   const checkedItems = (items || []).filter(
-    (it) => it.checked && it.sizeId != null
+    (it) => it.checked && it.sizeId != null,
   );
-  const checkedKey = checkedItems.map((it) => `${it.id}:${it.sizeId}`).join(",");
+  const checkedKey = checkedItems
+    .map((it) => `${it.id}:${it.sizeId}`)
+    .join(",");
 
   const buildRows = (list) =>
     list.map((item) => ({
@@ -72,7 +74,9 @@ export default function AreaRankingChart({ items }) {
     // 먼저 안내 문구를 보여주므로 이 경우 rankingData/loading/error는 안 쓰인다.
     if (checkedItems.length === 0) return;
 
-    const toFetch = checkedItems.filter((item) => !cacheRef.current[item.sizeId]);
+    const toFetch = checkedItems.filter(
+      (item) => !cacheRef.current[item.sizeId],
+    );
 
     if (toFetch.length === 0) {
       // 체크된 매물 전부 캐시에 있음 — 로딩 없이 바로 반영
@@ -90,8 +94,8 @@ export default function AreaRankingChart({ items }) {
       toFetch.map((item) =>
         getAreaRanking(item.sizeId).then((res) => {
           cacheRef.current[item.sizeId] = toRankingResult(res);
-        })
-      )
+        }),
+      ),
     )
       .then(() => {
         if (cancelled) return;
@@ -99,7 +103,9 @@ export default function AreaRankingChart({ items }) {
       })
       .catch(() => {
         if (cancelled) return;
-        setError("생활권 랭킹 데이터를 불러오지 못했어요. 잠시 후 다시 시도해주세요.");
+        setError(
+          "생활권 랭킹 데이터를 불러오지 못했어요. 잠시 후 다시 시도해주세요.",
+        );
         setRankingData([]);
       })
       .finally(() => {
@@ -119,7 +125,9 @@ export default function AreaRankingChart({ items }) {
     <ChartPlaceholder
       title="생활권 내 단지 랭킹"
       className="area-ranking-chart"
-      infoText={"주변 지역·비슷한 평형의 단지와 평당 가격을 비교해 현재 가격 수준을 확인할 수 있어요."}
+      infoText={
+        "주변 지역·비슷한 평형의 단지와 평당 가격을\n비교해 현재 가격 수준을 확인할 수 있어요."
+      }
     >
       <div className="area-ranking-chart__wrap">
         <div className="area-ranking-chart__header">
@@ -145,7 +153,11 @@ export default function AreaRankingChart({ items }) {
         >
           {checkedItems.length === 0 && (
             <div className="area-ranking-chart__empty">
-              <img className="chart-empty-icon" src="/empty-state-icon.png" alt="" />
+              <img
+                className="chart-empty-icon"
+                src="/empty-state-icon.png"
+                alt=""
+              />
               선택된 매물이 없어요.
             </div>
           )}
@@ -169,7 +181,9 @@ export default function AreaRankingChart({ items }) {
                 <div className="area-ranking-chart__row-name">{item.name}</div>
                 {item.sampleInsufficient ? (
                   <>
-                    <div className="area-ranking-chart__row-rank">표본 부족</div>
+                    <div className="area-ranking-chart__row-rank">
+                      표본 부족
+                    </div>
                     <div className="area-ranking-chart__row-percentile">-</div>
                   </>
                 ) : (

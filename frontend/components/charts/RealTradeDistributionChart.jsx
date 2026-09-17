@@ -401,6 +401,14 @@ export default function RealTradeDistributionChart({ items }) {
                   <stop offset="65%" stopColor="#09ce91" stopOpacity="0.06" />
                   <stop offset="100%" stopColor="#09ce91" stopOpacity="0" />
                 </radialGradient>
+                {/* 호가(입력한 가격) 점 주변에 깔리는 옅은 초록 배경 - 물결
+                    애니메이션이 퍼져나가는 중심임을 은은하게 표시한다
+                    (2026-09 피드백 - 깜빡이는 점만으로는 눈에 잘 안 띔). */}
+                <radialGradient id="tdcAskHalo">
+                  <stop offset="0%" stopColor="#09ce91" stopOpacity="0.35" />
+                  <stop offset="60%" stopColor="#09ce91" stopOpacity="0.12" />
+                  <stop offset="100%" stopColor="#09ce91" stopOpacity="0" />
+                </radialGradient>
                 <filter
                   id="tdcGlowBlur"
                   x="-60%"
@@ -514,12 +522,37 @@ export default function RealTradeDistributionChart({ items }) {
                     })}
 
                     {askWon != null && (
-                      <circle
-                        cx={centerX}
-                        cy={priceToY(askWon)}
-                        r={4.125}
-                        className="trade-distribution-chart__ask-dot"
-                      />
+                      <>
+                        {/* 옅은 초록 배경 */}
+                        <circle
+                          cx={centerX}
+                          cy={priceToY(askWon)}
+                          r={13}
+                          fill="url(#tdcAskHalo)"
+                          className="trade-distribution-chart__ask-dot-halo"
+                        />
+                        {/* 물결처럼 두 파장이 시간차를 두고 계속 퍼져나가는
+                            효과(2026-09 피드백 - 점이 깜빡이기보다 파동이
+                            치는 느낌이면 좋겠다는 요청). */}
+                        <circle
+                          cx={centerX}
+                          cy={priceToY(askWon)}
+                          r={4.125}
+                          className="trade-distribution-chart__ask-dot-ripple"
+                        />
+                        <circle
+                          cx={centerX}
+                          cy={priceToY(askWon)}
+                          r={4.125}
+                          className="trade-distribution-chart__ask-dot-ripple trade-distribution-chart__ask-dot-ripple--delayed"
+                        />
+                        <circle
+                          cx={centerX}
+                          cy={priceToY(askWon)}
+                          r={4.125}
+                          className="trade-distribution-chart__ask-dot"
+                        />
+                      </>
                     )}
 
                     <text

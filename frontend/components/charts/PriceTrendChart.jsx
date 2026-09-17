@@ -27,7 +27,14 @@ const TRADE_TYPES = [
 ];
 
 // 매물마다 다른 색 — MAX_DASHBOARD_ITEMS(6)와 맞춰 6색.
-const LINE_COLORS = ["#0bb76d", "#AFD61F", "#5398FF", "#968BE0", "#FFB270", "#D3D3D3"];
+const LINE_COLORS = [
+  "#0bb76d",
+  "#AFD61F",
+  "#5398FF",
+  "#968BE0",
+  "#FFB270",
+  "#D3D3D3",
+];
 
 function formatYearMonth(yearMonth) {
   // "2024-03" -> "24.03"
@@ -109,15 +116,17 @@ export default function PriceTrendChart({ items }) {
   const [error, setError] = useState(null);
 
   const checkedItems = (items || []).filter(
-    (it) => it.checked && it.sizeId != null
+    (it) => it.checked && it.sizeId != null,
   );
   const itemsById = useMemo(
     () => new Map(checkedItems.map((item) => [item.id, item])),
-    [checkedItems]
+    [checkedItems],
   );
   // 다른 실데이터 차트들과 동일한 이유(TradeVolumeLiquidityChart 참고)로
   // items 배열 참조 대신 의존성용 키 문자열을 쓴다.
-  const checkedKey = checkedItems.map((it) => `${it.id}:${it.sizeId}`).join(",");
+  const checkedKey = checkedItems
+    .map((it) => `${it.id}:${it.sizeId}`)
+    .join(",");
 
   useEffect(() => {
     // 체크된 매물이 없으면 조회를 건너뛴다 — 렌더에서 checkedItems.length로
@@ -137,8 +146,8 @@ export default function PriceTrendChart({ items }) {
         fetchTrend(item.sizeId, months).then((res) => ({
           itemId: item.id,
           points: res.monthly_median_prices || [],
-        }))
-      )
+        })),
+      ),
     )
       .then((results) => {
         if (cancelled) return;
@@ -148,10 +157,13 @@ export default function PriceTrendChart({ items }) {
         // 연월에 데이터가 없으면 그 지점만 비워둔다(선이 끊기는 게 아니라
         // Recharts가 알아서 그 지점을 건너뛰어 이어그림).
         const pricesByItemAndMonth = new Map(
-          results.map((r) => [r.itemId, new Map(r.points.map((p) => [p.year_month, p.median_price]))])
+          results.map((r) => [
+            r.itemId,
+            new Map(r.points.map((p) => [p.year_month, p.median_price])),
+          ]),
         );
         const allMonths = Array.from(
-          new Set(results.flatMap((r) => r.points.map((p) => p.year_month)))
+          new Set(results.flatMap((r) => r.points.map((p) => p.year_month))),
         ).sort();
 
         const rows = allMonths.map((ym) => {
@@ -167,7 +179,9 @@ export default function PriceTrendChart({ items }) {
       })
       .catch(() => {
         if (cancelled) return;
-        setError("실거래가 추이를 불러오지 못했어요. 잠시 후 다시 시도해주세요.");
+        setError(
+          "실거래가 추이를 불러오지 못했어요. 잠시 후 다시 시도해주세요.",
+        );
         setChartData([]);
       })
       .finally(() => {
@@ -186,7 +200,7 @@ export default function PriceTrendChart({ items }) {
       checkedItems
         .map((item) => entry[item.id])
         .filter((v) => v != null)
-        .map(Number)
+        .map(Number),
     );
     if (allValues.length === 0) return [0, 100000000];
 
@@ -224,7 +238,9 @@ export default function PriceTrendChart({ items }) {
     <ChartPlaceholder
       title="실거래가 추이"
       className="price-trend-chart"
-      infoText={"선택한 단지의 매매·전세 실거래가가 월별로 어떻게 움직였는지 비교해요."}
+      infoText={
+        "선택한 단지의 매매·전세 실거래가가\n월별로 어떻게 움직였는지 비교해요."
+      }
       headerRight={
         <div className="price-trend-chart__header-right">
           <label className="price-trend-chart__period-picker">
@@ -278,7 +294,11 @@ export default function PriceTrendChart({ items }) {
         <div className="price-trend-chart__chart">
           {checkedItems.length === 0 && (
             <div className="price-trend-chart__empty">
-              <img className="chart-empty-icon" src="/empty-state-icon.png" alt="" />
+              <img
+                className="chart-empty-icon"
+                src="/empty-state-icon.png"
+                alt=""
+              />
               선택된 매물이 없어요.
             </div>
           )}
@@ -310,7 +330,11 @@ export default function PriceTrendChart({ items }) {
                   tickLine={false}
                   axisLine={false}
                   tickMargin={8}
-                  tick={{ fontSize: "0.6875rem", fill: "#6b7280", fontWeight: 500 }}
+                  tick={{
+                    fontSize: "0.6875rem",
+                    fill: "#6b7280",
+                    fontWeight: 500,
+                  }}
                 />
                 <YAxis
                   width={36}
@@ -319,8 +343,14 @@ export default function PriceTrendChart({ items }) {
                   tickLine={false}
                   axisLine={false}
                   tickMargin={2}
-                  tick={{ fontSize: "0.6875rem", fill: "#6b7280", fontWeight: 500 }}
-                  tickFormatter={(value) => `${Math.round(value / 100000000)}억`}
+                  tick={{
+                    fontSize: "0.6875rem",
+                    fill: "#6b7280",
+                    fontWeight: 500,
+                  }}
+                  tickFormatter={(value) =>
+                    `${Math.round(value / 100000000)}억`
+                  }
                 />
                 <Tooltip content={<CustomTooltip itemsById={itemsById} />} />
 

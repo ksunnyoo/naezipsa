@@ -70,7 +70,9 @@ function VolumeTooltip({ active, payload, label }) {
                 flexShrink: 0,
               }}
             />
-            <span style={{ color: "#6b7280", fontWeight: 500 }}>{row.label}</span>
+            <span style={{ color: "#6b7280", fontWeight: 500 }}>
+              {row.label}
+            </span>
           </div>
           <span
             style={{
@@ -96,12 +98,14 @@ export default function TradeVolumeLiquidityChart({ items }) {
   const [error, setError] = useState(null);
 
   const checkedItems = (items || []).filter(
-    (it) => it.checked && it.sizeId != null
+    (it) => it.checked && it.sizeId != null,
   );
   // effect 의존성으로 items 배열 자체(매 렌더 새 참조)를 쓰면 동/호수 수정
   // 같은 무관한 변경에도 재조회가 돌게 된다 — "id:sizeId" 조합 문자열로
   // 줄여서 실제로 대상이 바뀔 때만 재조회되게 한다.
-  const checkedKey = checkedItems.map((it) => `${it.id}:${it.sizeId}`).join(",");
+  const checkedKey = checkedItems
+    .map((it) => `${it.id}:${it.sizeId}`)
+    .join(",");
 
   useEffect(() => {
     // 체크된 매물이 없으면 그냥 조회를 건너뛴다 — 아래 렌더에서
@@ -124,8 +128,8 @@ export default function TradeVolumeLiquidityChart({ items }) {
           name: item.name,
           sale: res.sale_count ?? 0,
           jeonse: res.jeonse_count ?? 0,
-        }))
-      )
+        })),
+      ),
     )
       .then((rows) => {
         if (cancelled) return;
@@ -133,7 +137,9 @@ export default function TradeVolumeLiquidityChart({ items }) {
       })
       .catch(() => {
         if (cancelled) return;
-        setError("거래량 데이터를 불러오지 못했어요. 잠시 후 다시 시도해주세요.");
+        setError(
+          "거래량 데이터를 불러오지 못했어요. 잠시 후 다시 시도해주세요.",
+        );
         setChartData([]);
       })
       .finally(() => {
@@ -151,12 +157,17 @@ export default function TradeVolumeLiquidityChart({ items }) {
     <ChartPlaceholder
       title="거래량 유동성"
       className="trade-volume-liquidity-chart"
-      infoText={"매매·전세 거래량을 보여줘요.\n거래가 꾸준할수록 실제로 사고팔거나 세입자를 구하기 수월한 편이에요."}
+      infoText={
+        "매매·전세 거래량을 보여줘요. 거래가 꾸준할수록\n실제로 사고팔거나 세입자를 구하기 수월한 편이에요."
+      }
       headerRight={
         <div className="trade-volume-liquidity-chart__header-right">
           <div className="trade-volume-liquidity-chart__legend">
             {SERIES.map((series) => (
-              <span key={series.key} className="trade-volume-liquidity-chart__legend-item">
+              <span
+                key={series.key}
+                className="trade-volume-liquidity-chart__legend-item"
+              >
                 <span
                   className="trade-volume-liquidity-chart__legend-dot"
                   style={{ background: series.color }}
@@ -184,7 +195,11 @@ export default function TradeVolumeLiquidityChart({ items }) {
         <div className="trade-volume-liquidity-chart__chart">
           {checkedItems.length === 0 && (
             <div className="trade-volume-liquidity-chart__empty">
-              <img className="chart-empty-icon" src="/empty-state-icon.png" alt="" />
+              <img
+                className="chart-empty-icon"
+                src="/empty-state-icon.png"
+                alt=""
+              />
               선택된 매물이 없어요.
             </div>
           )}
