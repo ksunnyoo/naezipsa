@@ -4492,6 +4492,10 @@ select:focus-visible {
 .insight-panel-inner > .insight-cards-row {
   flex: 1 0 260px;
 }
+.recharts-responsive-container svg,
+.recharts-responsive-container g {
+  outline: none;
+}
 .subscription-status {
   flex-shrink: 0;
   font-size: 0.6875rem;
