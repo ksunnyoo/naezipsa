@@ -506,3 +506,4 @@ alembic upgrade head
 - **[backend/info.md](backend/info.md)** — 전체 명령어, API 명세, 지표 계산 기준
 - **[frontend/README.md](frontend/README.md)** — 프론트엔드 폴더 구조, 화면 흐름, 상태를 어디서 들고 있는지
 - [docs/development-kickoff-plan.md](docs/development-kickoff-plan.md) — 기능별 구현 기록과 결정 이력, 수동 확인 목록
+- [docs/deploy.md](docs/deploy.md) — 배포 방법 (프론트는 Vercel, 백엔드는 Render)

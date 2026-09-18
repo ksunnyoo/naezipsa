@@ -72,6 +72,15 @@ DB_POOL_SIZE = int(os.getenv("DB_POOL_SIZE") or 3)
 DB_MAX_OVERFLOW = int(os.getenv("DB_MAX_OVERFLOW") or 2)
 DB_POOL_TIMEOUT = int(os.getenv("DB_POOL_TIMEOUT") or 10)  # 연결을 기다리는 최대 초
 
+# 브라우저에서 이 API를 부를 수 있는 프론트 주소 목록(CORS). 쉼표로 여러 개.
+# 비워 두면 "*"(전부 허용)이라 지금까지의 동작과 같다. 배포 후 프론트 도메인이
+# 정해지면 그때 좁힌다.
+#   예: CORS_ALLOW_ORIGINS=https://naezipsa.vercel.app,http://localhost:3000
+# 주의: 좁히면 Vercel이 PR마다 만드는 미리보기 주소(랜덤)는 막힌다.
+CORS_ALLOW_ORIGINS = [
+    o.strip() for o in os.getenv("CORS_ALLOW_ORIGINS", "").split(",") if o.strip()
+] or ["*"]
+
 # 필수 키가 비어있으면 앱 시작 시점에 바로 알 수 있도록 경고
 _required = {
     "MOLIT_API_KEY": MOLIT_API_KEY,
