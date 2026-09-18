@@ -10,6 +10,7 @@ FastAPI 앱 진입점.
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.core.config import CORS_ALLOW_ORIGINS
 from app.core.errors import register_exception_handlers
 from app.dashboard import router as dashboard_router
 from app.group import router as group_router
@@ -28,11 +29,12 @@ app = FastAPI(title="부동산 실거래 대시보드 API")
 # 형식과 code 목록은 app/core/errors.py 참고.
 register_exception_handlers(app)
 
-# 프론트엔드(Next.js 등)에서 호출 가능하도록 CORS 허용
-# 배포 시에는 allow_origins를 실제 프론트 도메인으로 좁히는 것을 권장
+# 프론트엔드(Next.js 등)에서 호출 가능하도록 CORS 허용.
+# 기본은 전부 허용(*)이고, 배포 환경에서 CORS_ALLOW_ORIGINS에 프론트 도메인을
+# 넣으면 그때부터 그 주소만 허용한다(config.py 참고).
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=CORS_ALLOW_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
 )

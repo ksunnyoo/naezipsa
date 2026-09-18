@@ -1,0 +1,51 @@
+# Render 배포 설계도(Blueprint). 백엔드(FastAPI)만 올린다.
+# 프론트(Next.js)는 Vercel에 따로 올리고, 여기서 받은 주소를
+# Vercel 환경변수 NEXT_PUBLIC_API_BASE_URL에 넣는다. 자세한 순서는 docs/deploy.md.
+#
+# Render 대시보드 -> New -> Blueprint -> 이 저장소 선택 하면 이 파일을 읽는다.
+services:
+  - type: web
+    name: naezipsa-api
+    runtime: python
+    plan: free          # 15분 요청이 없으면 잠든다. 깨어나는 데 첫 요청이 40~60초.
+    region: singapore   # Render 지역 중 한국에서 가장 가깝다(Supabase는 서울).
+    rootDir: backend    # 모노레포라 백엔드 폴더를 루트로 잡아야 한다.
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /  # main.py의 health_check가 200을 준다.
+    envVars:
+      # 팀 로컬은 3.14.6에서 검증했다. Render가 이 버전을 거부하면(빌드 로그에
+      # "version not available") 3.13.x로 낮춰도 된다 — requirements.txt의
+      # 고정 버전들은 3.13에서도 전부 설치된다.
+      - key: PYTHON_VERSION
+        value: "3.14.0"
+
+      # sync: false = 값을 여기 적지 않고 Render 대시보드에서 직접 넣는다.
+      # 비밀값이라 Git에 올리면 안 된다. backend/.env의 같은 이름 값을 그대로 옮기면 된다.
+      - key: DATABASE_URL          # 반드시 6543(Transaction pooler) 주소
+        sync: false
+      - key: SUPABASE_JWT_SECRET   # 로그인 토큰 검증용. 없으면 로그인 기능 전부 401
+        sync: false
+      - key: MOLIT_API_KEY         # 국토부 실거래
+        sync: false
+      - key: APPLYHOME_API_KEY     # 청약홈
+        sync: false
+      - key: KAKAO_API_KEY         # 주소 정규화
+        sync: false
+      - key: REB_API_KEY           # 한국부동산원
+        sync: false
+      - key: KOSIS_API_KEY         # 국가통계포털
+        sync: false
+      - key: GEMINI_API_KEY        # AI 분석
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_PUBLISHABLE_KEY
+        sync: false
+      - key: SUPABASE_SECRET_KEY
+        sync: false
+
+      # 나중에 프론트 도메인만 허용하고 싶을 때 Render 대시보드에서 추가한다.
+      # 비워 두면 지금처럼 전부 허용(*). 자세한 건 docs/deploy.md.
+      - key: CORS_ALLOW_ORIGINS
+        sync: false
