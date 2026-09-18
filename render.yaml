@@ -26,24 +26,23 @@ services:
         sync: false
       - key: SUPABASE_JWT_SECRET   # 로그인 토큰 검증용. 없으면 로그인 기능 전부 401
         sync: false
-      - key: MOLIT_API_KEY         # 국토부 실거래
+      - key: APPLYHOME_API_KEY     # 청약홈 분양정보. 없으면 청약 탭이 빈다
         sync: false
-      - key: APPLYHOME_API_KEY     # 청약홈
+      - key: REB_API_KEY           # 한국부동산원. 없으면 거시지표 차트가 빈다
         sync: false
-      - key: KAKAO_API_KEY         # 주소 정규화
-        sync: false
-      - key: REB_API_KEY           # 한국부동산원
-        sync: false
-      - key: KOSIS_API_KEY         # 국가통계포털
+      - key: KOSIS_API_KEY         # 국가통계포털. 없으면 거시지표 차트가 빈다
         sync: false
       - key: GEMINI_API_KEY        # AI 분석
         sync: false
-      - key: SUPABASE_URL
-        sync: false
-      - key: SUPABASE_PUBLISHABLE_KEY
-        sync: false
-      - key: SUPABASE_SECRET_KEY
-        sync: false
+
+      # 일부러 뺀 것들:
+      #   MOLIT_API_KEY  - 실거래를 수집하는 배치(ingest/)에서만 쓴다. 서버는
+      #                    이미 DB에 쌓인 걸 읽으므로 배포에는 필요 없다.
+      #                    (없으면 시작 로그에 경고가 뜨지만 서버는 정상으로 뜬다)
+      #   KAKAO_API_KEY  - 지금 코드에서 쓰는 곳이 없다.
+      #   MIGRATION_DATABASE_URL - Render는 마이그레이션을 돌리지 않는다.
+      #   SUPABASE_URL / _PUBLISHABLE_KEY / _SECRET_KEY - 백엔드는 ORM으로 직접
+      #                    붙어서 쓰지 않는다. 프론트가 쓰는 건 Vercel 쪽에 넣는다.
 
       # 나중에 프론트 도메인만 허용하고 싶을 때 Render 대시보드에서 추가한다.
       # 비워 두면 지금처럼 전부 허용(*). 자세한 건 docs/deploy.md.

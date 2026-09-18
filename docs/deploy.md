@@ -25,17 +25,28 @@ DB는 **바꿀 것이 없습니다.** 지금 팀이 같이 쓰는 Supabase에 Re
    저장소 맨 위의 `render.yaml`을 읽어서 설정을 알아서 채웁니다.
 3. 환경변수를 넣으라고 나옵니다. **`backend/.env`에 있는 값을 그대로 복사해서** 넣으면 됩니다.
 
+   **꼭 필요한 것**
+
    | 넣을 값 | 없으면 어떻게 되나 |
    |---|---|
    | `DATABASE_URL` | 서버가 아예 안 뜹니다. **반드시 6543 포트(Transaction pooler) 주소**여야 합니다 |
-   | `SUPABASE_JWT_SECRET` | 로그인 관련 기능이 전부 401로 막힙니다 |
-   | `MOLIT_API_KEY` | 실거래 검색·시세가 빕니다 |
-   | `APPLYHOME_API_KEY` | 청약 목록이 빕니다 |
-   | `KAKAO_API_KEY` | 주소 정규화가 안 됩니다 |
+   | `SUPABASE_JWT_SECRET` | 로그인이 필요한 기능이 전부 401로 막힙니다 |
+   | `APPLYHOME_API_KEY` | 청약 탭이 빕니다 (청약홈 분양정보 API) |
    | `REB_API_KEY` / `KOSIS_API_KEY` | 거시지표 차트가 빕니다 |
    | `GEMINI_API_KEY` | AI 분석이 안 됩니다 |
-   | `SUPABASE_URL` / `SUPABASE_PUBLISHABLE_KEY` / `SUPABASE_SECRET_KEY` | 지금은 백엔드가 안 씁니다(자리만) |
+
+   **안 넣어도 되는 것**
+
+   | 값 | 왜 |
+   |---|---|
+   | `MOLIT_API_KEY` | 실거래를 **수집하는 배치**(`ingest/`)에서만 씁니다. 서버는 이미 DB에 쌓인 걸 읽습니다 |
+   | `KAKAO_API_KEY` | 지금 코드에서 쓰는 곳이 없습니다(자리만 남아 있음) |
+   | `MIGRATION_DATABASE_URL` | Render는 마이그레이션을 돌리지 않습니다 |
+   | `SUPABASE_URL` / `SUPABASE_PUBLISHABLE_KEY` / `SUPABASE_SECRET_KEY` | 백엔드는 ORM으로 직접 붙어서 안 씁니다(자리만) |
    | `CORS_ALLOW_ORIGINS` | 비워 두세요. 4단계에서 채웁니다 |
+
+   > `MOLIT_API_KEY`가 비어 있으면 서버 시작 로그에 `[경고] .env에 다음 값이 비어있습니다`가
+   > 뜨지만 **경고일 뿐이고 서버는 정상으로 뜹니다.** 배치를 돌릴 때만 필요합니다.
 
 4. 배포가 끝나면 `https://naezipsa-api-xxxx.onrender.com` 같은 주소가 나옵니다.
    그 주소를 브라우저로 열어 `{"status":"ok", ...}`가 보이면 성공입니다.
