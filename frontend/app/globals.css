@@ -3440,6 +3440,14 @@ select:focus-visible {
   height: auto;
   max-height: min(615px, calc(100vh - 40px));
 }
+/* .edit-dialog-name은 원래 매물 수정 창에서 "OO아파트" 같은 한 줄짜리
+   이름용이라 white-space: nowrap이다. 공유 모달의 summary는 문장이라
+   줄바꿈이 필요해서 이 모달에서만 풀어준다(2026-09, 헤더 래퍼 정리하며
+   같이 확인). */
+.edit-dialog--share .edit-dialog-name {
+  white-space: normal;
+  line-height: 1.5;
+}
 .edit-dialog-close {
   position: absolute;
   top: 14px;

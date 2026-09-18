@@ -53,19 +53,31 @@ export default function ImportShareModal({ open, items, groupName = null, onImpo
         aria-modal="true"
         aria-label={title}
       >
-        <div className="edit-dialog-title">{title}</div>
-        <div className="edit-dialog-name">{summary}</div>
+        {/* 2026-09: 지적받은 대로 title/summary를 .edit-dialog-header 없이
+            .edit-dialog에 바로 넣고 있었다 - 매물 수정 창(EditListingDialog)이
+            쓰는 실제 헤더 래퍼(.edit-dialog-header, 안쪽 padding 26px +
+            아래쪽 구분선)를 이 모달만 빠뜨린 게 "패딩도 없고 헤더에 스타일이
+            하나도 안 먹은" 원인이었다. 같은 래퍼를 그대로 재사용해서 모달
+            껍데기 스타일을 통일한다. */}
+        <div className="edit-dialog-header">
+          <div className="edit-dialog-title">{title}</div>
+          <div className="edit-dialog-name-row">
+            <div className="edit-dialog-name">{summary}</div>
+          </div>
+        </div>
 
         {items.length > 0 && (
-          <div className="share-preview-list">
-            {items.map((item, i) => (
-              <div className="share-preview-row" key={i}>
-                <span className="share-preview-name">
-                  {item.complex_name || "단지 정보 준비중"}
-                </span>
-                <span className="share-preview-size">{detailLabel(item)}</span>
-              </div>
-            ))}
+          <div className="edit-dialog-panel">
+            <div className="share-preview-list">
+              {items.map((item, i) => (
+                <div className="share-preview-row" key={i}>
+                  <span className="share-preview-name">
+                    {item.complex_name || "단지 정보 준비중"}
+                  </span>
+                  <span className="share-preview-size">{detailLabel(item)}</span>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
