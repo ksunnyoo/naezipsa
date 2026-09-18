@@ -92,8 +92,14 @@ body {
   font-size: 100%;
   background: var(--color-panel);
   color: var(--color-ink);
+  /* 2026-09: 추천 폰트 후보(SUIT, Spoqa Han Sans Neo, IBM Plex Sans KR,
+     Wanted Sans) 4개를 순서대로 미리보기해보고 Wanted Sans로 확정.
+     프리텐다드로 되돌리려면 이 font-family 첫 값을 "Pretendard"로,
+     layout.js의 <link> href를
+     https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css
+     로 되돌리면 된다. */
   font-family:
-    "Pretendard",
+    "Wanted Sans",
     -apple-system,
     BlinkMacSystemFont,
     "Apple SD Gothic Neo",
