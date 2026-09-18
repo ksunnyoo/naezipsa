@@ -40,20 +40,44 @@ export default function ImportShareModal({ open, items, groupName = null, onImpo
         if (e.target === e.currentTarget) onCancel();
       }}
     >
-      <div className="edit-dialog" role="dialog" aria-modal="true" aria-label={title}>
-        <div className="edit-dialog-title">{title}</div>
-        <div className="edit-dialog-name">{summary}</div>
+      {/* 2026-09: 이 모달만 공유 내용만 보여주는 짧은 카드라 .edit-dialog가
+          원래 갖고 있던 height:90vh + max-height:615px 조합(체크리스트가
+          있는 매물 수정 창 전용)이 필요 없다. 특정 환경에서 그 높이/폭
+          지정이 무시되면서 카드가 화면 전체로 늘어나 보이는 문제가
+          보고되어(2026-09), 이 모달에서만 폭/높이를 더 단순하고 안전한
+          값(auto 높이 + calc 기반 폭)으로 덮어쓴다. 다른 곳에서 쓰는
+          .edit-dialog 기본값은 그대로 둬서 매물 수정 창에는 영향 없다. */}
+      <div
+        className="edit-dialog edit-dialog--share"
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+      >
+        {/* 2026-09: 지적받은 대로 title/summary를 .edit-dialog-header 없이
+            .edit-dialog에 바로 넣고 있었다 - 매물 수정 창(EditListingDialog)이
+            쓰는 실제 헤더 래퍼(.edit-dialog-header, 안쪽 padding 26px +
+            아래쪽 구분선)를 이 모달만 빠뜨린 게 "패딩도 없고 헤더에 스타일이
+            하나도 안 먹은" 원인이었다. 같은 래퍼를 그대로 재사용해서 모달
+            껍데기 스타일을 통일한다. */}
+        <div className="edit-dialog-header">
+          <div className="edit-dialog-title">{title}</div>
+          <div className="edit-dialog-name-row">
+            <div className="edit-dialog-name">{summary}</div>
+          </div>
+        </div>
 
         {items.length > 0 && (
-          <div className="share-preview-list">
-            {items.map((item, i) => (
-              <div className="share-preview-row" key={i}>
-                <span className="share-preview-name">
-                  {item.complex_name || "단지 정보 준비중"}
-                </span>
-                <span className="share-preview-size">{detailLabel(item)}</span>
-              </div>
-            ))}
+          <div className="edit-dialog-panel">
+            <div className="share-preview-list">
+              {items.map((item, i) => (
+                <div className="share-preview-row" key={i}>
+                  <span className="share-preview-name">
+                    {item.complex_name || "단지 정보 준비중"}
+                  </span>
+                  <span className="share-preview-size">{detailLabel(item)}</span>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
