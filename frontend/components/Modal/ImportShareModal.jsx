@@ -40,7 +40,19 @@ export default function ImportShareModal({ open, items, groupName = null, onImpo
         if (e.target === e.currentTarget) onCancel();
       }}
     >
-      <div className="edit-dialog" role="dialog" aria-modal="true" aria-label={title}>
+      {/* 2026-09: 이 모달만 공유 내용만 보여주는 짧은 카드라 .edit-dialog가
+          원래 갖고 있던 height:90vh + max-height:615px 조합(체크리스트가
+          있는 매물 수정 창 전용)이 필요 없다. 특정 환경에서 그 높이/폭
+          지정이 무시되면서 카드가 화면 전체로 늘어나 보이는 문제가
+          보고되어(2026-09), 이 모달에서만 폭/높이를 더 단순하고 안전한
+          값(auto 높이 + calc 기반 폭)으로 덮어쓴다. 다른 곳에서 쓰는
+          .edit-dialog 기본값은 그대로 둬서 매물 수정 창에는 영향 없다. */}
+      <div
+        className="edit-dialog edit-dialog--share"
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+      >
         <div className="edit-dialog-title">{title}</div>
         <div className="edit-dialog-name">{summary}</div>
 
